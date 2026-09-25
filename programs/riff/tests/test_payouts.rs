@@ -72,12 +72,16 @@ fn trade_round_trips(l: &mut Launch) {
     }
 }
 
+// TransactionResult is LiteSVM's type; its large Err is not ours to box.
+#[allow(clippy::result_large_err)]
 fn withdraw_creator(l: &mut Launch) -> litesvm::types::TransactionResult {
     let ix = withdraw_creator_fees_ix(&l.creator.pubkey(), &l.mint);
     let creator = l.creator.insecure_clone();
     send(&mut l.env.svm, ix, &[&creator])
 }
 
+// TransactionResult is LiteSVM's type; its large Err is not ours to box.
+#[allow(clippy::result_large_err)]
 fn collect_protocol(l: &mut Launch) -> litesvm::types::TransactionResult {
     let stranger = funded_keypair(&mut l.env.svm);
     let ix = collect_protocol_fees_ix(&l.env.treasury, &l.mint);
