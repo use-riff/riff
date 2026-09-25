@@ -9,6 +9,14 @@ pub const COIN_SEED: &[u8] = b"coin";
 #[constant]
 pub const VAULT_SEED: &[u8] = b"vault";
 
+/// Highest total trading fee the config will accept (10%).
+#[constant]
+pub const MAX_TRADE_FEE_BPS: u16 = 1_000;
+
+/// Highest creator launch-buy cap the config will accept (10% of supply).
+#[constant]
+pub const MAX_CREATOR_BUY_BPS: u16 = 1_000;
+
 /// Basis-point denominator (100%).
 #[constant]
 pub const BPS_DENOMINATOR: u16 = 10_000;

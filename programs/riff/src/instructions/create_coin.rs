@@ -3,6 +3,10 @@ use anchor_lang::{
     system_program::{transfer, Transfer},
 };
 use anchor_spl::{
+    associated_token::{
+        create as create_associated_token_account, get_associated_token_address_with_program_id,
+        AssociatedToken, Create,
+    },
     token_2022::{
         set_authority, spl_token_2022::instruction::AuthorityType, SetAuthority, Token2022,
     },
@@ -17,6 +21,7 @@ use crate::{
     constants::*,
     error::ErrorCode,
     events::CoinCreated,
+    instructions::trade::{emit_trade, pay_for_buy, release_tokens, settle_buy},
     state::{Coin, Config},
 };
 
@@ -28,6 +33,14 @@ pub struct CreateCoinArgs {
     /// External artist identifier (e.g. a streaming-platform artist ID).
     pub artist_id: String,
     pub artist_name: String,
+    /// Most SOL (fee included) the creator spends buying at launch, from the
+    /// same curve as everyone else. 0 for no buy. The tokens bought may not
+    /// exceed the config's cap.
+    pub creator_buy_sol: u64,
+    /// Fewest tokens the launch buy may return. The curve is fresh, but the
+    /// config's fees and curve settings could change between signing and
+    /// landing.
+    pub creator_buy_min_tokens: u64,
 }
 
 #[derive(Accounts)]
@@ -35,7 +48,10 @@ pub struct CreateCoin<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
-    pub config: Account<'info, Config>,
+    pub config: Box<Account<'info, Config>>,
+    /// Receives the protocol fee on the creator's launch buy.
+    #[account(mut, address = config.treasury)]
+    pub treasury: SystemAccount<'info>,
     #[account(
         init,
         payer = creator,
@@ -43,7 +59,7 @@ pub struct CreateCoin<'info> {
         seeds = [COIN_SEED, mint.key().as_ref()],
         bump
     )]
-    pub coin: Account<'info, Coin>,
+    pub coin: Box<Account<'info, Coin>>,
     /// Fresh keypair. The coin PDA is mint authority only for the length of
     /// this instruction; no freeze authority is ever set.
     #[account(
@@ -55,7 +71,7 @@ pub struct CreateCoin<'info> {
         extensions::metadata_pointer::authority = coin,
         extensions::metadata_pointer::metadata_address = mint,
     )]
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         init,
         payer = creator,
@@ -65,8 +81,20 @@ pub struct CreateCoin<'info> {
         token::authority = coin,
         token::token_program = token_program,
     )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: the creator's associated token account for the new mint.
+    /// Created only if the creator buys at launch; its address is enforced.
+    #[account(
+        mut,
+        address = get_associated_token_address_with_program_id(
+            &creator.key(),
+            &mint.key(),
+            &token_program.key(),
+        ),
+    )]
+    pub creator_token_account: UncheckedAccount<'info>,
     pub token_program: Program<'info, Token2022>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -186,6 +214,7 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         .checked_add(ctx.accounts.config.claim_window_secs)
         .ok_or(ErrorCode::MathOverflow)?;
 
+    let config = &ctx.accounts.config;
     ctx.accounts.coin.set_inner(Coin {
         mint: mint_key,
         vault: ctx.accounts.vault.key(),
@@ -195,17 +224,82 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         artist: None,
         created_at: now,
         claim_deadline,
+        virtual_sol_reserves: config.initial_virtual_sol_reserves,
+        virtual_token_reserves: config.initial_virtual_token_reserves,
+        real_sol_reserves: 0,
+        real_token_reserves: config.curve_token_supply,
+        artist_fees: 0,
+        creator_fees: 0,
+        complete: false,
         bump,
         vault_bump: ctx.bumps.vault,
     });
 
+    // Optional launch buy, priced on the fresh curve exactly like any other
+    // buy.
+    let a = ctx.accounts;
+    let creator_buy = if args.creator_buy_sol > 0 {
+        let (quote, fees) = settle_buy(&a.config, &mut a.coin, args.creator_buy_sol)?;
+        require!(
+            quote.tokens_out <= a.config.max_creator_buy_tokens(),
+            ErrorCode::CreatorBuyTooLarge
+        );
+        require!(
+            quote.tokens_out >= args.creator_buy_min_tokens,
+            ErrorCode::SlippageExceeded
+        );
+        Some((quote, fees))
+    } else {
+        None
+    };
+
     emit!(CoinCreated {
         coin: coin_key,
         mint: mint_key,
-        creator: ctx.accounts.creator.key(),
+        creator: a.creator.key(),
         artist_id: args.artist_id,
         artist_name: args.artist_name,
         claim_deadline,
+        creator_buy_tokens: creator_buy.map_or(0, |(q, _)| q.tokens_out),
+        creator_buy_sol: creator_buy.map_or(0, |(q, _)| q.total_cost),
     });
+
+    if let Some((quote, fees)) = creator_buy {
+        create_associated_token_account(CpiContext::new(
+            a.associated_token_program.key(),
+            Create {
+                payer: a.creator.to_account_info(),
+                associated_token: a.creator_token_account.to_account_info(),
+                authority: a.creator.to_account_info(),
+                mint: a.mint.to_account_info(),
+                system_program: a.system_program.to_account_info(),
+                token_program: a.token_program.to_account_info(),
+            },
+        ))?;
+        pay_for_buy(
+            &a.system_program,
+            &a.creator.to_account_info(),
+            &a.coin.to_account_info(),
+            &a.treasury.to_account_info(),
+            &quote,
+            &fees,
+        )?;
+        release_tokens(
+            &a.token_program,
+            &a.vault,
+            &a.mint,
+            &a.creator_token_account.to_account_info(),
+            &a.coin,
+            quote.tokens_out,
+        )?;
+        emit_trade(
+            &a.coin,
+            a.creator.key(),
+            true,
+            quote.sol_to_curve,
+            quote.tokens_out,
+            &fees,
+        )?;
+    }
     Ok(())
 }

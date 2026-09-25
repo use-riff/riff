@@ -1,8 +1,25 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::*, error::ErrorCode, events::ConfigInitialized, program::Riff, state::Config,
+    constants::*, curve::graduation_virtual_token_reserves, error::ErrorCode,
+    events::ConfigInitialized, program::Riff, state::Config,
 };
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct ConfigParams {
+    pub treasury: Pubkey,
+    /// Fee rates in basis points of each trade's SOL amount.
+    pub artist_fee_bps: u16,
+    pub creator_fee_bps: u16,
+    pub protocol_fee_bps: u16,
+    pub claim_window_secs: i64,
+    pub initial_virtual_sol_reserves: u64,
+    /// Tokens sold on the curve. The graduation reserve is the rest of the
+    /// supply, and the starting virtual token reserves are derived from both.
+    pub curve_token_supply: u64,
+    /// Creator launch-buy cap, in basis points of total supply.
+    pub max_creator_buy_bps: u16,
+}
 
 #[derive(Accounts)]
 pub struct InitializeConfig<'info> {
@@ -30,26 +47,53 @@ pub struct InitializeConfig<'info> {
 
 pub fn handle_initialize_config(
     ctx: Context<InitializeConfig>,
-    artist_fee_share_bps: u16,
-    claim_window_secs: i64,
+    params: ConfigParams,
 ) -> Result<()> {
+    let total_fee_bps = params.artist_fee_bps as u32
+        + params.creator_fee_bps as u32
+        + params.protocol_fee_bps as u32;
     require!(
-        artist_fee_share_bps <= BPS_DENOMINATOR,
-        ErrorCode::InvalidArtistFeeShare
+        total_fee_bps <= MAX_TRADE_FEE_BPS as u32,
+        ErrorCode::InvalidTradeFee
     );
-    require!(claim_window_secs > 0, ErrorCode::InvalidClaimWindow);
+    require!(params.claim_window_secs > 0, ErrorCode::InvalidClaimWindow);
+    require!(
+        params.max_creator_buy_bps <= MAX_CREATOR_BUY_BPS,
+        ErrorCode::InvalidCreatorBuyCap
+    );
+    require!(
+        params.initial_virtual_sol_reserves > 0,
+        ErrorCode::InvalidCurveParams
+    );
+    let initial_virtual_token_reserves =
+        graduation_virtual_token_reserves(COIN_TOTAL_SUPPLY, params.curve_token_supply)
+            .ok_or(ErrorCode::InvalidCurveParams)?;
 
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
-        artist_fee_share_bps,
-        claim_window_secs,
+        treasury: params.treasury,
+        artist_fee_bps: params.artist_fee_bps,
+        creator_fee_bps: params.creator_fee_bps,
+        protocol_fee_bps: params.protocol_fee_bps,
+        claim_window_secs: params.claim_window_secs,
+        initial_virtual_sol_reserves: params.initial_virtual_sol_reserves,
+        initial_virtual_token_reserves,
+        curve_token_supply: params.curve_token_supply,
+        max_creator_buy_bps: params.max_creator_buy_bps,
         bump: ctx.bumps.config,
     });
 
     emit!(ConfigInitialized {
         admin: ctx.accounts.admin.key(),
-        artist_fee_share_bps,
-        claim_window_secs,
+        treasury: params.treasury,
+        artist_fee_bps: params.artist_fee_bps,
+        creator_fee_bps: params.creator_fee_bps,
+        protocol_fee_bps: params.protocol_fee_bps,
+        claim_window_secs: params.claim_window_secs,
+        initial_virtual_sol_reserves: params.initial_virtual_sol_reserves,
+        initial_virtual_token_reserves,
+        curve_token_supply: params.curve_token_supply,
+        max_creator_buy_bps: params.max_creator_buy_bps,
     });
     Ok(())
 }
