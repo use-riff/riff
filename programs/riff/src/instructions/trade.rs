@@ -12,6 +12,7 @@ use crate::{
     curve::{quote_buy, quote_sell, split_fee, BuyQuote, FeeSplit},
     error::ErrorCode,
     events::{CurveCompleted, Trade},
+    payout::pay_from_coin,
     state::{Coin, Config},
 };
 
@@ -114,10 +115,9 @@ pub fn handle_sell(ctx: Context<Swap>, token_amount: u64, min_sol_out: u64) -> R
         COIN_DECIMALS,
     )?;
 
-    // The program owns the coin account, so it can debit lamports directly.
-    // All three fees are simply left behind on the coin.
-    debit(&coin.to_account_info(), quote.sol_out)?;
-    credit(&a.trader.to_account_info(), quote.sol_out)?;
+    // Paid out of the curve's SOL (already reduced above). All three fees
+    // are simply left behind on the coin.
+    pay_from_coin(coin, &a.trader.to_account_info(), quote.sol_out)?;
 
     emit_trade(
         coin,
@@ -259,23 +259,4 @@ fn pay<'info>(
         ),
         lamports,
     )
-}
-
-/// Moves lamports out of a program-owned account.
-pub(crate) fn debit(account: &AccountInfo, lamports: u64) -> Result<()> {
-    let balance = account
-        .lamports()
-        .checked_sub(lamports)
-        .ok_or(ErrorCode::MathOverflow)?;
-    **account.try_borrow_mut_lamports()? = balance;
-    Ok(())
-}
-
-pub(crate) fn credit(account: &AccountInfo, lamports: u64) -> Result<()> {
-    let balance = account
-        .lamports()
-        .checked_add(lamports)
-        .ok_or(ErrorCode::MathOverflow)?;
-    **account.try_borrow_mut_lamports()? = balance;
-    Ok(())
 }

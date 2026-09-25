@@ -1,10 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::*,
-    error::ErrorCode,
-    events::CreatorFeesWithdrawn,
-    instructions::trade::{credit, debit},
+    constants::*, error::ErrorCode, events::CreatorFeesWithdrawn, payout::pay_from_coin,
     state::Coin,
 };
 
@@ -28,8 +25,7 @@ pub fn handle_withdraw_creator_fees(ctx: Context<WithdrawCreatorFees>) -> Result
     require!(amount > 0, ErrorCode::NoFeesToWithdraw);
     coin.creator_fees = 0;
 
-    debit(&coin.to_account_info(), amount)?;
-    credit(&ctx.accounts.creator.to_account_info(), amount)?;
+    pay_from_coin(coin, &ctx.accounts.creator.to_account_info(), amount)?;
 
     emit!(CreatorFeesWithdrawn {
         coin: coin.key(),

@@ -4,7 +4,7 @@ use crate::{
     constants::*,
     error::ErrorCode,
     events::ProtocolFeesCollected,
-    instructions::trade::{credit, debit},
+    payout::pay_from_coin,
     state::{Coin, Config},
 };
 
@@ -39,8 +39,7 @@ pub fn handle_collect_protocol_fees(ctx: Context<CollectProtocolFees>) -> Result
     );
 
     coin.protocol_fees = 0;
-    debit(&coin.to_account_info(), amount)?;
-    credit(&treasury, amount)?;
+    pay_from_coin(coin, &treasury, amount)?;
 
     emit!(ProtocolFeesCollected {
         coin: coin.key(),
