@@ -58,3 +58,10 @@ pub struct CreatorFeesWithdrawn {
     pub creator: Pubkey,
     pub amount: u64,
 }
+
+#[event]
+pub struct ProtocolFeesCollected {
+    pub coin: Pubkey,
+    pub treasury: Pubkey,
+    pub amount: u64,
+}

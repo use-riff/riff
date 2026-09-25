@@ -36,4 +36,8 @@ pub mod riff {
     pub fn withdraw_creator_fees(ctx: Context<WithdrawCreatorFees>) -> Result<()> {
         crate::instructions::withdraw_creator_fees::handle_withdraw_creator_fees(ctx)
     }
+
+    pub fn collect_protocol_fees(ctx: Context<CollectProtocolFees>) -> Result<()> {
+        crate::instructions::collect_protocol_fees::handle_collect_protocol_fees(ctx)
+    }
 }

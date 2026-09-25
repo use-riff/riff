@@ -166,19 +166,13 @@ pub fn coin_args() -> riff::CreateCoinArgs {
     }
 }
 
-pub fn create_coin_ix(
-    creator: &Pubkey,
-    mint: &Pubkey,
-    treasury: &Pubkey,
-    args: riff::CreateCoinArgs,
-) -> Instruction {
+pub fn create_coin_ix(creator: &Pubkey, mint: &Pubkey, args: riff::CreateCoinArgs) -> Instruction {
     Instruction::new_with_bytes(
         riff::ID,
         &riff::instruction::CreateCoin { args }.data(),
         riff::accounts::CreateCoin {
             creator: *creator,
             config: config_address(),
-            treasury: *treasury,
             coin: coin_address(mint),
             mint: *mint,
             vault: vault_address(mint),
@@ -206,12 +200,7 @@ pub fn setup_coin_with_creator(env: &mut Env) -> (Keypair, Pubkey) {
     initialize_config(env);
     let creator = funded_keypair(&mut env.svm);
     let mint = Keypair::new();
-    let ix = create_coin_ix(
-        &creator.pubkey(),
-        &mint.pubkey(),
-        &env.treasury,
-        coin_args(),
-    );
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
     send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
     (creator, mint.pubkey())
 }
@@ -269,11 +258,10 @@ pub fn trader(svm: &mut LiteSVM, mint: &Pubkey, lamports: u64) -> Keypair {
     kp
 }
 
-fn swap_accounts(trader: &Pubkey, mint: &Pubkey, treasury: &Pubkey) -> Vec<AccountMeta> {
+fn swap_accounts(trader: &Pubkey, mint: &Pubkey) -> Vec<AccountMeta> {
     riff::accounts::Swap {
         trader: *trader,
         config: config_address(),
-        treasury: *treasury,
         coin: coin_address(mint),
         mint: *mint,
         vault: vault_address(mint),
@@ -284,13 +272,7 @@ fn swap_accounts(trader: &Pubkey, mint: &Pubkey, treasury: &Pubkey) -> Vec<Accou
     .to_account_metas(None)
 }
 
-pub fn buy_ix(
-    trader: &Pubkey,
-    mint: &Pubkey,
-    treasury: &Pubkey,
-    max_sol_in: u64,
-    min_tokens_out: u64,
-) -> Instruction {
+pub fn buy_ix(trader: &Pubkey, mint: &Pubkey, max_sol_in: u64, min_tokens_out: u64) -> Instruction {
     Instruction::new_with_bytes(
         riff::ID,
         &riff::instruction::Buy {
@@ -298,17 +280,11 @@ pub fn buy_ix(
             min_tokens_out,
         }
         .data(),
-        swap_accounts(trader, mint, treasury),
+        swap_accounts(trader, mint),
     )
 }
 
-pub fn sell_ix(
-    trader: &Pubkey,
-    mint: &Pubkey,
-    treasury: &Pubkey,
-    token_amount: u64,
-    min_sol_out: u64,
-) -> Instruction {
+pub fn sell_ix(trader: &Pubkey, mint: &Pubkey, token_amount: u64, min_sol_out: u64) -> Instruction {
     Instruction::new_with_bytes(
         riff::ID,
         &riff::instruction::Sell {
@@ -316,7 +292,7 @@ pub fn sell_ix(
             min_sol_out,
         }
         .data(),
-        swap_accounts(trader, mint, treasury),
+        swap_accounts(trader, mint),
     )
 }
 
@@ -332,4 +308,17 @@ pub fn token_balance(svm: &LiteSVM, token_account: &Pubkey) -> u64 {
 
 pub fn lamports(svm: &LiteSVM, address: &Pubkey) -> u64 {
     svm.get_account(address).map_or(0, |a| a.lamports)
+}
+
+pub fn collect_protocol_fees_ix(treasury: &Pubkey, mint: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::CollectProtocolFees {}.data(),
+        riff::accounts::CollectProtocolFees {
+            config: config_address(),
+            treasury: *treasury,
+            coin: coin_address(mint),
+        }
+        .to_account_metas(None),
+    )
 }

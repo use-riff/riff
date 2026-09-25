@@ -34,4 +34,6 @@ pub enum ErrorCode {
     CreatorBuyTooLarge,
     #[msg("No fees to withdraw")]
     NoFeesToWithdraw,
+    #[msg("Collection would leave the treasury below the rent-exempt minimum")]
+    TreasuryNotRentExempt,
 }

@@ -49,9 +49,6 @@ pub struct CreateCoin<'info> {
     pub creator: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
-    /// Receives the protocol fee on the creator's launch buy.
-    #[account(mut, address = config.treasury)]
-    pub treasury: SystemAccount<'info>,
     #[account(
         init,
         payer = creator,
@@ -230,6 +227,7 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         real_token_reserves: config.curve_token_supply,
         artist_fees: 0,
         creator_fees: 0,
+        protocol_fees: 0,
         complete: false,
         bump,
         vault_bump: ctx.bumps.vault,
@@ -280,9 +278,7 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
             &a.system_program,
             &a.creator.to_account_info(),
             &a.coin.to_account_info(),
-            &a.treasury.to_account_info(),
             &quote,
-            &fees,
         )?;
         release_tokens(
             &a.token_program,
