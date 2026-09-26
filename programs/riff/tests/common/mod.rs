@@ -108,6 +108,39 @@ pub fn send(svm: &mut LiteSVM, ix: Instruction, signers: &[&Keypair]) -> Transac
     res
 }
 
+/// Sends several instructions as one atomic transaction; the first signer
+/// pays.
+#[allow(clippy::result_large_err)]
+pub fn send_many(
+    svm: &mut LiteSVM,
+    ixs: &[Instruction],
+    signers: &[&Keypair],
+) -> TransactionResult {
+    let blockhash = svm.latest_blockhash();
+    let msg = Message::new_with_blockhash(ixs, Some(&signers[0].pubkey()), &blockhash);
+    let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), signers).unwrap();
+    let res = svm.send_transaction(tx);
+    svm.expire_blockhash();
+    res
+}
+
+/// Associated Token Account program CreateIdempotent for `owner`, paid by
+/// `payer`.
+pub fn create_ata_ix(payer: &Pubkey, owner: &Pubkey, mint: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        ATA_PROGRAM_ID,
+        &[1],
+        vec![
+            AccountMeta::new(*payer, true),
+            AccountMeta::new(ata_address(owner, mint), false),
+            AccountMeta::new_readonly(*owner, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(system_program::ID, false),
+            AccountMeta::new_readonly(TOKEN_2022_ID, false),
+        ],
+    )
+}
+
 /// Asserts the transaction failed with the given riff error.
 pub fn assert_riff_error(res: TransactionResult, expected: riff::error::ErrorCode) {
     let err = res.expect_err("transaction should have failed");
@@ -202,7 +235,15 @@ pub fn setup_coin_with_creator(env: &mut Env) -> (Keypair, Pubkey) {
     let mint = Keypair::new();
     let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
     send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
+    next_slot(&mut env.svm);
     (creator, mint.pubkey())
+}
+
+/// Advances one slot. `buy` is closed in a coin's launch slot, so tests move
+/// on before trading, as the chain would.
+pub fn next_slot(svm: &mut LiteSVM) {
+    let slot = svm.get_sysvar::<Clock>().slot;
+    svm.warp_to_slot(slot + 1);
 }
 
 pub fn withdraw_creator_fees_ix(creator: &Pubkey, mint: &Pubkey) -> Instruction {
@@ -241,19 +282,7 @@ pub fn ata_address(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
 pub fn trader(svm: &mut LiteSVM, mint: &Pubkey, lamports: u64) -> Keypair {
     let kp = Keypair::new();
     svm.airdrop(&kp.pubkey(), lamports).unwrap();
-    // Associated Token Account program: CreateIdempotent.
-    let ix = Instruction::new_with_bytes(
-        ATA_PROGRAM_ID,
-        &[1],
-        vec![
-            AccountMeta::new(kp.pubkey(), true),
-            AccountMeta::new(ata_address(&kp.pubkey(), mint), false),
-            AccountMeta::new_readonly(kp.pubkey(), false),
-            AccountMeta::new_readonly(*mint, false),
-            AccountMeta::new_readonly(system_program::ID, false),
-            AccountMeta::new_readonly(TOKEN_2022_ID, false),
-        ],
-    );
+    let ix = create_ata_ix(&kp.pubkey(), &kp.pubkey(), mint);
     send(svm, ix, &[&kp]).unwrap();
     kp
 }

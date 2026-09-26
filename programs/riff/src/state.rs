@@ -64,6 +64,9 @@ pub struct Coin {
     /// Set when the artist claims the coin.
     pub artist: Option<Pubkey>,
     pub created_at: i64,
+    /// Slot the coin was created in. `buy` is closed for this slot, so the
+    /// creator's capped launch buy is the only purchase possible at launch.
+    pub created_slot: u64,
     /// Last moment the artist may claim, fixed at creation from the config's
     /// claim window so later config changes don't move it.
     pub claim_deadline: i64,

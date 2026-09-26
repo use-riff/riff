@@ -32,6 +32,8 @@ pub enum ErrorCode {
     CurveComplete,
     #[msg("Creator launch buy exceeds the cap")]
     CreatorBuyTooLarge,
+    #[msg("Trading opens the slot after launch")]
+    TradingNotOpen,
     #[msg("No fees to withdraw")]
     NoFeesToWithdraw,
     #[msg("Collection would leave the treasury below the rent-exempt minimum")]

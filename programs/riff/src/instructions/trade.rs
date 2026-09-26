@@ -49,6 +49,13 @@ pub struct Swap<'info> {
 /// least `min_tokens_out`. The final buy is trimmed to what the curve has left.
 pub fn handle_buy(ctx: Context<Swap>, max_sol_in: u64, min_tokens_out: u64) -> Result<()> {
     let a = ctx.accounts;
+    // Closed in the launch slot: otherwise buys bundled into the launch
+    // transaction (by the creator or any wallet they control) would land
+    // before anyone else could trade, bypassing the creator-buy cap.
+    require!(
+        Clock::get()?.slot > a.coin.created_slot,
+        ErrorCode::TradingNotOpen
+    );
     let (quote, fees) = settle_buy(&a.config, &mut a.coin, max_sol_in)?;
     require!(
         quote.tokens_out >= min_tokens_out,

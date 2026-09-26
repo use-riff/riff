@@ -206,7 +206,8 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         None,
     )?;
 
-    let now = Clock::get()?.unix_timestamp;
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
     let claim_deadline = now
         .checked_add(ctx.accounts.config.claim_window_secs)
         .ok_or(ErrorCode::MathOverflow)?;
@@ -220,6 +221,7 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         artist_name: args.artist_name.clone(),
         artist: None,
         created_at: now,
+        created_slot: clock.slot,
         claim_deadline,
         virtual_sol_reserves: config.initial_virtual_sol_reserves,
         virtual_token_reserves: config.initial_virtual_token_reserves,
