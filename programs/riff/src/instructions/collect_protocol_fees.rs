@@ -4,7 +4,7 @@ use crate::{
     constants::*,
     error::ErrorCode,
     events::ProtocolFeesCollected,
-    payout::pay_from_coin,
+    payout::{pay_from_coin, require_rent_exempt_after},
     state::{Coin, Config},
 };
 
@@ -26,17 +26,7 @@ pub fn handle_collect_protocol_fees(ctx: Context<CollectProtocolFees>) -> Result
     let amount = coin.protocol_fees;
     require!(amount > 0, ErrorCode::NoFeesToWithdraw);
 
-    // Solana rejects leaving an account with a nonzero balance below the
-    // rent-exempt minimum. Check it here too, for a clear error instead of a
-    // runtime failure, and so tests don't depend on the runtime enforcing it.
-    let balance_after = treasury
-        .lamports()
-        .checked_add(amount)
-        .ok_or(ErrorCode::MathOverflow)?;
-    require!(
-        Rent::get()?.is_exempt(balance_after, treasury.data_len()),
-        ErrorCode::TreasuryNotRentExempt
-    );
+    require_rent_exempt_after(&treasury, amount, ErrorCode::TreasuryNotRentExempt)?;
 
     coin.protocol_fees = 0;
     pay_from_coin(coin, &treasury, amount)?;

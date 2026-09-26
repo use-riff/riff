@@ -232,9 +232,7 @@ pub(crate) fn emit_trade(
 }
 
 fn accrue_fees(coin: &mut Coin, fees: &FeeSplit) -> Result<()> {
-    coin.artist_fees = coin
-        .artist_fees
-        .checked_add(fees.artist)
+    coin.accrue_artist_share(fees.artist, Clock::get()?.unix_timestamp)
         .ok_or(ErrorCode::MathOverflow)?;
     coin.creator_fees = coin
         .creator_fees

@@ -11,6 +11,12 @@ pub struct Config {
     /// permissionless `collect_protocol_fees`. Trades never touch it, so it
     /// needn't sign or exist in advance (e.g. a Squads vault).
     pub treasury: Pubkey,
+    /// Receives artist fees nobody can claim: the artist's share for a coin
+    /// whose claim window closed unclaimed. riff donates from it.
+    pub charity: Pubkey,
+    /// Co-signs every `claim_artist`, vouching that the claiming wallet
+    /// belongs to the coin's artist. Held by riff's verification service.
+    pub verifier: Pubkey,
     /// Trading fee rates, each in basis points of a trade's SOL amount. Their
     /// sum is the total fee charged.
     pub artist_fee_bps: u16,
@@ -74,8 +80,11 @@ pub struct Coin {
     pub virtual_token_reserves: u64,
     pub real_sol_reserves: u64,
     pub real_token_reserves: u64,
-    /// Artist fees accrued and not yet paid out, in lamports.
+    /// Artist fees held for the artist, in lamports: accrued before the claim
+    /// window closed, or after the artist claimed.
     pub artist_fees: u64,
+    /// Artist-share fees owed to the charity and not yet swept, in lamports.
+    pub charity_fees: u64,
     /// Creator fees accrued and not yet withdrawn, in lamports.
     pub creator_fees: u64,
     /// Protocol fees accrued and not yet collected to the treasury, in lamports.
@@ -94,6 +103,34 @@ impl Coin {
             real_token: self.real_token_reserves,
             real_sol: self.real_sol_reserves,
         }
+    }
+
+    /// Unclaimed after the claim window: the artist's share now belongs to
+    /// the charity, until the artist claims.
+    pub fn artist_share_goes_to_charity(&self, now: i64) -> bool {
+        self.artist.is_none() && now > self.claim_deadline
+    }
+
+    /// Credits the artist's share of a trade fee to whoever it belongs to now.
+    pub fn accrue_artist_share(&mut self, amount: u64, now: i64) -> Option<()> {
+        if self.artist_share_goes_to_charity(now) {
+            self.charity_fees = self.charity_fees.checked_add(amount)?;
+        } else {
+            self.artist_fees = self.artist_fees.checked_add(amount)?;
+        }
+        Some(())
+    }
+
+    /// Once the claim window has closed unclaimed, fees held for the artist
+    /// are forfeited to the charity. Returns the amount moved.
+    pub fn forfeit_unclaimed_artist_fees(&mut self, now: i64) -> Option<u64> {
+        if !self.artist_share_goes_to_charity(now) {
+            return Some(0);
+        }
+        let forfeited = self.artist_fees;
+        self.charity_fees = self.charity_fees.checked_add(forfeited)?;
+        self.artist_fees = 0;
+        Some(forfeited)
     }
 
     pub fn set_reserves(&mut self, r: Reserves) {

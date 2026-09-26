@@ -40,4 +40,20 @@ pub enum ErrorCode {
     TreasuryNotRentExempt,
     #[msg("Payout would leave the coin account unable to cover what it owes")]
     CoinUnderfunded,
+    #[msg("Sweep would leave the charity wallet below the rent-exempt minimum")]
+    CharityNotRentExempt,
+    #[msg("A coin can't pay out to itself")]
+    InvalidPayoutRecipient,
+    #[msg("Address must not be the default (all zeros) key")]
+    InvalidAddress,
+    #[msg("Claim must be co-signed by the configured verifier")]
+    NotVerifier,
+    #[msg("This coin's artist has already claimed it")]
+    AlreadyClaimed,
+    #[msg("Artist ID doesn't match the coin's artist")]
+    ArtistIdMismatch,
+    #[msg("Only the coin's claimed artist can do this")]
+    NotArtist,
+    #[msg("Only the config admin can do this")]
+    NotAdmin,
 }

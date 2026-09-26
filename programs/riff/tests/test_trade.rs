@@ -21,7 +21,11 @@ fn assert_coin_solvent(env: &Env, mint: &Pubkey) {
     let rent = env.svm.minimum_balance_for_rent_exemption(data_len);
     assert_eq!(
         lamports(&env.svm, &coin_key),
-        rent + coin.real_sol_reserves + coin.artist_fees + coin.creator_fees + coin.protocol_fees
+        rent + coin.real_sol_reserves
+            + coin.artist_fees
+            + coin.charity_fees
+            + coin.creator_fees
+            + coin.protocol_fees
     );
     // Vault holds the unsold curve tokens plus the graduation reserve.
     assert_eq!(
@@ -275,7 +279,11 @@ fn many_traders_round_trip_stays_solvent() {
     assert!(coin.artist_fees > 0);
     assert_eq!(
         traders_start - balances(&env),
-        coin.artist_fees + coin.creator_fees + coin.protocol_fees + coin.real_sol_reserves
+        coin.artist_fees
+            + coin.charity_fees
+            + coin.creator_fees
+            + coin.protocol_fees
+            + coin.real_sol_reserves
     );
 }
 

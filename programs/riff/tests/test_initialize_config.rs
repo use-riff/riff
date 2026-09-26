@@ -38,7 +38,7 @@ fn derives_virtual_token_reserves_from_supply_split() {
 fn rejects_non_upgrade_authority() {
     let mut env = setup();
     let impostor = funded_keypair(&mut env.svm);
-    let ix = initialize_config_ix(&impostor.pubkey(), config_params(env.treasury));
+    let ix = initialize_config_ix(&impostor.pubkey(), config_params(&env));
 
     assert_riff_error(
         send(&mut env.svm, ix, &[&impostor]),
@@ -50,7 +50,7 @@ fn rejects_non_upgrade_authority() {
 /// Each case must be rejected with its error; the config must not be created.
 fn assert_rejected(set: impl Fn(&mut riff::ConfigParams), expected: ErrorCode) {
     let mut env = setup();
-    let mut params = config_params(env.treasury);
+    let mut params = config_params(&env);
     set(&mut params);
     let ix = initialize_config_ix(&env.admin.pubkey(), params);
     assert_riff_error(send(&mut env.svm, ix, &[&env.admin]), expected);
@@ -88,7 +88,7 @@ fn rejects_creator_buy_cap_over_10_percent() {
 #[test]
 fn accepts_boundary_values() {
     let mut env = setup();
-    let mut params = config_params(env.treasury);
+    let mut params = config_params(&env);
     params.artist_fee_bps = 500;
     params.creator_fee_bps = 300;
     params.protocol_fee_bps = 200;
@@ -120,7 +120,7 @@ fn cannot_initialize_twice() {
     let mut env = setup();
     initialize_config(&mut env);
 
-    let mut params = config_params(env.treasury);
+    let mut params = config_params(&env);
     params.artist_fee_bps = 0;
     let ix = initialize_config_ix(&env.admin.pubkey(), params);
     assert!(send(&mut env.svm, ix, &[&env.admin]).is_err());

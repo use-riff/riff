@@ -4,6 +4,8 @@ use anchor_lang::prelude::*;
 pub struct ConfigInitialized {
     pub admin: Pubkey,
     pub treasury: Pubkey,
+    pub charity: Pubkey,
+    pub verifier: Pubkey,
     pub artist_fee_bps: u16,
     pub creator_fee_bps: u16,
     pub protocol_fee_bps: u16,
@@ -63,5 +65,38 @@ pub struct CreatorFeesWithdrawn {
 pub struct ProtocolFeesCollected {
     pub coin: Pubkey,
     pub treasury: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct ConfigUpdated {
+    pub treasury: Pubkey,
+    pub charity: Pubkey,
+    pub verifier: Pubkey,
+}
+
+#[event]
+pub struct ArtistClaimed {
+    pub coin: Pubkey,
+    pub artist: Pubkey,
+    pub artist_id: String,
+    /// Claimed after the claim window closed.
+    pub late: bool,
+    /// Fees held for the artist that went to the charity instead because
+    /// the claim was late.
+    pub forfeited_to_charity: u64,
+}
+
+#[event]
+pub struct ArtistFeesWithdrawn {
+    pub coin: Pubkey,
+    pub artist: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct CharityFeesSwept {
+    pub coin: Pubkey,
+    pub charity: Pubkey,
     pub amount: u64,
 }

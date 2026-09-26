@@ -228,6 +228,7 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         real_sol_reserves: 0,
         real_token_reserves: config.curve_token_supply,
         artist_fees: 0,
+        charity_fees: 0,
         creator_fees: 0,
         protocol_fees: 0,
         complete: false,

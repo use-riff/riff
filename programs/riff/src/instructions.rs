@@ -1,11 +1,19 @@
+pub mod claim_artist;
 pub mod collect_protocol_fees;
 pub mod create_coin;
 pub mod initialize_config;
+pub mod sweep_charity_fees;
 pub mod trade;
+pub mod update_config;
+pub mod withdraw_artist_fees;
 pub mod withdraw_creator_fees;
 
+pub use claim_artist::*;
 pub use collect_protocol_fees::*;
 pub use create_coin::*;
 pub use initialize_config::*;
+pub use sweep_charity_fees::*;
 pub use trade::*;
+pub use update_config::*;
+pub use withdraw_artist_fees::*;
 pub use withdraw_creator_fees::*;

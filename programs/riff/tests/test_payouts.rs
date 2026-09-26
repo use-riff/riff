@@ -14,7 +14,7 @@ struct Launch {
 /// Config from `set`, then one coin.
 fn launch(set: impl Fn(&mut riff::ConfigParams)) -> Launch {
     let mut env = setup();
-    let mut params = config_params(env.treasury);
+    let mut params = config_params(&env);
     set(&mut params);
     let admin = env.admin.insecure_clone();
     send(

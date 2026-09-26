@@ -35,6 +35,8 @@ pub const INITIAL_VIRTUAL_TOKEN: u64 = 1_073_025_605_595_359;
 pub const MAX_CREATOR_BUY_BPS: u16 = 300;
 /// Starting treasury balance: enough to stay rent-exempt.
 pub const TREASURY_START: u64 = 1_000_000;
+/// Starting charity balance: enough to stay rent-exempt.
+pub const CHARITY_START: u64 = 1_000_000;
 
 const ATA_PROGRAM_ID: Pubkey =
     Pubkey::from_str_const("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -44,6 +46,10 @@ pub struct Env {
     /// Program upgrade authority.
     pub admin: Keypair,
     pub treasury: Pubkey,
+    /// Receives unclaimable artist fees.
+    pub charity: Pubkey,
+    /// riff's verification service: co-signs artist claims.
+    pub verifier: Keypair,
 }
 
 pub fn program_data_address() -> Pubkey {
@@ -84,10 +90,14 @@ pub fn setup() -> Env {
     svm.airdrop(&admin.pubkey(), 10_000_000_000).unwrap();
     let treasury = Pubkey::new_unique();
     svm.airdrop(&treasury, TREASURY_START).unwrap();
+    let charity = Pubkey::new_unique();
+    svm.airdrop(&charity, CHARITY_START).unwrap();
     Env {
         svm,
         admin,
         treasury,
+        charity,
+        verifier: Keypair::new(),
     }
 }
 
@@ -153,9 +163,11 @@ pub fn assert_riff_error(res: TransactionResult, expected: riff::error::ErrorCod
     );
 }
 
-pub fn config_params(treasury: Pubkey) -> riff::ConfigParams {
+pub fn config_params(env: &Env) -> riff::ConfigParams {
     riff::ConfigParams {
-        treasury,
+        treasury: env.treasury,
+        charity: env.charity,
+        verifier: env.verifier.pubkey(),
         artist_fee_bps: ARTIST_FEE_BPS,
         creator_fee_bps: CREATOR_FEE_BPS,
         protocol_fee_bps: PROTOCOL_FEE_BPS,
@@ -182,7 +194,7 @@ pub fn initialize_config_ix(admin: &Pubkey, params: riff::ConfigParams) -> Instr
 }
 
 pub fn initialize_config(env: &mut Env) {
-    let ix = initialize_config_ix(&env.admin.pubkey(), config_params(env.treasury));
+    let ix = initialize_config_ix(&env.admin.pubkey(), config_params(env));
     let admin = env.admin.insecure_clone();
     send(&mut env.svm, ix, &[&admin]).unwrap();
 }
@@ -350,4 +362,79 @@ pub fn collect_protocol_fees_ix(treasury: &Pubkey, mint: &Pubkey) -> Instruction
         }
         .to_account_metas(None),
     )
+}
+
+pub fn claim_artist_ix(
+    artist: &Pubkey,
+    verifier: &Pubkey,
+    mint: &Pubkey,
+    artist_id: &str,
+) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::ClaimArtist {
+            artist_id: artist_id.to_string(),
+        }
+        .data(),
+        riff::accounts::ClaimArtist {
+            artist: *artist,
+            verifier: *verifier,
+            config: config_address(),
+            coin: coin_address(mint),
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// The coin's artist claims it, co-signed by the configured verifier.
+#[allow(clippy::result_large_err)]
+pub fn claim_artist(env: &mut Env, artist: &Keypair, mint: &Pubkey) -> TransactionResult {
+    let artist_id = fetch::<riff::Coin>(&env.svm, &coin_address(mint)).artist_id;
+    let verifier = env.verifier.insecure_clone();
+    let ix = claim_artist_ix(&artist.pubkey(), &verifier.pubkey(), mint, &artist_id);
+    send(&mut env.svm, ix, &[artist, &verifier])
+}
+
+pub fn withdraw_artist_fees_ix(artist: &Pubkey, mint: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::WithdrawArtistFees {}.data(),
+        riff::accounts::WithdrawArtistFees {
+            artist: *artist,
+            coin: coin_address(mint),
+        }
+        .to_account_metas(None),
+    )
+}
+
+pub fn sweep_charity_fees_ix(charity: &Pubkey, mint: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::SweepCharityFees {}.data(),
+        riff::accounts::SweepCharityFees {
+            config: config_address(),
+            charity: *charity,
+            coin: coin_address(mint),
+        }
+        .to_account_metas(None),
+    )
+}
+
+pub fn update_config_ix(admin: &Pubkey, params: riff::UpdateConfigParams) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::UpdateConfig { params }.data(),
+        riff::accounts::UpdateConfig {
+            admin: *admin,
+            config: config_address(),
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// Moves the clock `secs` forward.
+pub fn advance_time(svm: &mut LiteSVM, secs: i64) {
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.unix_timestamp += secs;
+    svm.set_sysvar(&clock);
 }
