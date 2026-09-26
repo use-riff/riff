@@ -27,6 +27,7 @@ fn launch(set: impl Fn(&mut riff::ConfigParams)) -> Launch {
     let mint = Keypair::new();
     let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
     send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
+    next_slot(&mut env.svm);
     Launch {
         env,
         creator,

@@ -173,6 +173,7 @@ fn collect_from_several_coins() {
     let mint_b = Keypair::new();
     let ix = create_coin_ix(&creator.pubkey(), &mint_b.pubkey(), coin_args());
     send(&mut env.svm, ix, &[&creator, &mint_b]).unwrap();
+    next_slot(&mut env.svm);
     let mint_b = mint_b.pubkey();
 
     let alice = trader(&mut env.svm, &mint_a, 10 * SOL);
