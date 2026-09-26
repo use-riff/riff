@@ -41,4 +41,20 @@ pub mod riff {
     pub fn collect_protocol_fees(ctx: Context<CollectProtocolFees>) -> Result<()> {
         crate::instructions::collect_protocol_fees::handle_collect_protocol_fees(ctx)
     }
+
+    pub fn claim_artist(ctx: Context<ClaimArtist>, artist_id: String) -> Result<()> {
+        crate::instructions::claim_artist::handle_claim_artist(ctx, artist_id)
+    }
+
+    pub fn withdraw_artist_fees(ctx: Context<WithdrawArtistFees>) -> Result<()> {
+        crate::instructions::withdraw_artist_fees::handle_withdraw_artist_fees(ctx)
+    }
+
+    pub fn sweep_charity_fees(ctx: Context<SweepCharityFees>) -> Result<()> {
+        crate::instructions::sweep_charity_fees::handle_sweep_charity_fees(ctx)
+    }
+
+    pub fn update_config(ctx: Context<UpdateConfig>, params: UpdateConfigParams) -> Result<()> {
+        crate::instructions::update_config::handle_update_config(ctx, params)
+    }
 }

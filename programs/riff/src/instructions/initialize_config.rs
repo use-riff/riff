@@ -8,6 +8,8 @@ use crate::{
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ConfigParams {
     pub treasury: Pubkey,
+    pub charity: Pubkey,
+    pub verifier: Pubkey,
     /// Fee rates in basis points of each trade's SOL amount.
     pub artist_fee_bps: u16,
     pub creator_fee_bps: u16,
@@ -57,6 +59,9 @@ pub fn handle_initialize_config(
         ErrorCode::InvalidTradeFee
     );
     require!(params.claim_window_secs > 0, ErrorCode::InvalidClaimWindow);
+    for key in [params.treasury, params.charity, params.verifier] {
+        require_keys_neq!(key, Pubkey::default(), ErrorCode::InvalidAddress);
+    }
     require!(
         params.max_creator_buy_bps <= MAX_CREATOR_BUY_BPS,
         ErrorCode::InvalidCreatorBuyCap
@@ -72,6 +77,8 @@ pub fn handle_initialize_config(
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
         treasury: params.treasury,
+        charity: params.charity,
+        verifier: params.verifier,
         artist_fee_bps: params.artist_fee_bps,
         creator_fee_bps: params.creator_fee_bps,
         protocol_fee_bps: params.protocol_fee_bps,
@@ -86,6 +93,8 @@ pub fn handle_initialize_config(
     emit!(ConfigInitialized {
         admin: ctx.accounts.admin.key(),
         treasury: params.treasury,
+        charity: params.charity,
+        verifier: params.verifier,
         artist_fee_bps: params.artist_fee_bps,
         creator_fee_bps: params.creator_fee_bps,
         protocol_fee_bps: params.protocol_fee_bps,
