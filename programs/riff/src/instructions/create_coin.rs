@@ -232,6 +232,7 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         creator_fees: 0,
         protocol_fees: 0,
         complete: false,
+        pool: None,
         bump,
         vault_bump: ctx.bumps.vault,
     });

@@ -38,6 +38,13 @@ pub const TREASURY_START: u64 = 1_000_000;
 /// Starting charity balance: enough to stay rent-exempt.
 pub const CHARITY_START: u64 = 1_000_000;
 
+/// Raydium CPMM fee tier 0 (0.25% trade fee) on mainnet; see fixtures/.
+pub const RAYDIUM_AMM_CONFIG: Pubkey =
+    Pubkey::from_str_const("D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2");
+/// Raydium CPMM fee tier 1 (1% trade fee): a real tier riff isn't configured for.
+pub const RAYDIUM_AMM_CONFIG_1PCT: Pubkey =
+    Pubkey::from_str_const("G95xxie3XbkCqtE39GgQ9Ggc7xBC8Uceve7HFDEFApkc");
+
 const ATA_PROGRAM_ID: Pubkey =
     Pubkey::from_str_const("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
@@ -73,6 +80,7 @@ pub fn setup() -> Env {
     let mut svm = LiteSVM::new();
     let bytes = include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/riff.so"));
     svm.add_program(riff::ID, bytes).unwrap();
+    load_raydium(&mut svm);
 
     // LiteSVM deploys with no upgrade authority. Rewrite the ProgramData
     // header (bincode: u32 tag, u64 slot, Option<Pubkey>) to set one.
@@ -168,6 +176,7 @@ pub fn config_params(env: &Env) -> riff::ConfigParams {
         treasury: env.treasury,
         charity: env.charity,
         verifier: env.verifier.pubkey(),
+        raydium_amm_config: RAYDIUM_AMM_CONFIG,
         artist_fee_bps: ARTIST_FEE_BPS,
         creator_fee_bps: CREATOR_FEE_BPS,
         protocol_fee_bps: PROTOCOL_FEE_BPS,
@@ -437,4 +446,216 @@ pub fn advance_time(svm: &mut LiteSVM, secs: i64) {
     let mut clock = svm.get_sysvar::<Clock>();
     clock.unix_timestamp += secs;
     svm.set_sysvar(&clock);
+}
+
+/// Loads Raydium CPMM and the mainnet accounts it needs, from snapshots in
+/// tests/fixtures/ (taken with `solana program dump` / `solana account`).
+fn load_raydium(svm: &mut LiteSVM) {
+    let so = include_bytes!("../fixtures/raydium_cpmm.so");
+    svm.add_program(riff::RAYDIUM_CPMM_PROGRAM_ID, so).unwrap();
+    for json in [
+        include_str!("../fixtures/amm_config_0.json"),
+        include_str!("../fixtures/amm_config_1.json"),
+        include_str!("../fixtures/create_pool_fee_receiver.json"),
+        include_str!("../fixtures/wsol_mint.json"),
+    ] {
+        use base64::Engine;
+        let v: serde_json::Value = serde_json::from_str(json).unwrap();
+        let a = &v["account"];
+        let account = solana_account::Account {
+            lamports: a["lamports"].as_u64().unwrap(),
+            data: base64::engine::general_purpose::STANDARD
+                .decode(a["data"][0].as_str().unwrap())
+                .unwrap(),
+            owner: a["owner"].as_str().unwrap().parse().unwrap(),
+            executable: a["executable"].as_bool().unwrap(),
+            rent_epoch: 0,
+        };
+        let key: Pubkey = v["pubkey"].as_str().unwrap().parse().unwrap();
+        svm.set_account(key, account).unwrap();
+    }
+}
+
+// ---------------------------------------------------------------- graduation
+
+pub const TOKEN_PROGRAM_ID: Pubkey =
+    Pubkey::from_str_const("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+pub const WSOL_MINT: Pubkey = Pubkey::from_str_const("So11111111111111111111111111111111111111112");
+const COMPUTE_BUDGET_PROGRAM_ID: Pubkey =
+    Pubkey::from_str_const("ComputeBudget111111111111111111111111111111");
+
+pub fn ata_for(owner: &Pubkey, mint: &Pubkey, token_program: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[owner.as_ref(), token_program.as_ref(), mint.as_ref()],
+        &ATA_PROGRAM_ID,
+    )
+    .0
+}
+
+fn raydium_pda(seeds: &[&[u8]]) -> Pubkey {
+    Pubkey::find_program_address(seeds, &riff::RAYDIUM_CPMM_PROGRAM_ID).0
+}
+
+/// Every address involved in graduating `mint`.
+pub struct GraduationAccounts {
+    pub authority: Pubkey,
+    pub token_account: Pubkey,
+    pub wsol_account: Pubkey,
+    pub lp_account: Pubkey,
+    pub pool: Pubkey,
+    pub raydium_authority: Pubkey,
+    pub lp_mint: Pubkey,
+    pub pool_token_vault: Pubkey,
+    pub pool_wsol_vault: Pubkey,
+    pub observation: Pubkey,
+}
+
+pub fn graduation_accounts(mint: &Pubkey) -> GraduationAccounts {
+    let authority =
+        Pubkey::find_program_address(&[riff::GRADUATION_SEED, mint.as_ref()], &riff::ID).0;
+    let pool = Pubkey::find_program_address(&[riff::POOL_SEED, mint.as_ref()], &riff::ID).0;
+    let lp_mint = raydium_pda(&[riff::RAYDIUM_POOL_LP_MINT_SEED, pool.as_ref()]);
+    GraduationAccounts {
+        authority,
+        token_account: ata_for(&authority, mint, &TOKEN_2022_ID),
+        wsol_account: ata_for(&authority, &WSOL_MINT, &TOKEN_PROGRAM_ID),
+        lp_account: ata_for(&authority, &lp_mint, &TOKEN_PROGRAM_ID),
+        pool,
+        raydium_authority: raydium_pda(&[riff::RAYDIUM_AUTH_SEED]),
+        lp_mint,
+        pool_token_vault: raydium_pda(&[
+            riff::RAYDIUM_POOL_VAULT_SEED,
+            pool.as_ref(),
+            mint.as_ref(),
+        ]),
+        pool_wsol_vault: raydium_pda(&[
+            riff::RAYDIUM_POOL_VAULT_SEED,
+            pool.as_ref(),
+            WSOL_MINT.as_ref(),
+        ]),
+        observation: raydium_pda(&[riff::RAYDIUM_OBSERVATION_SEED, pool.as_ref()]),
+    }
+}
+
+pub fn compute_budget_ix(units: u32) -> Instruction {
+    let mut data = vec![2];
+    data.extend_from_slice(&units.to_le_bytes());
+    Instruction::new_with_bytes(COMPUTE_BUDGET_PROGRAM_ID, &data, vec![])
+}
+
+pub fn graduate_ix(payer: &Pubkey, mint: &Pubkey) -> Instruction {
+    let g = graduation_accounts(mint);
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::Graduate {}.data(),
+        riff::accounts::Graduate {
+            payer: *payer,
+            config: config_address(),
+            coin: coin_address(mint),
+            mint: *mint,
+            vault: vault_address(mint),
+            graduation_authority: g.authority,
+            graduation_token_account: g.token_account,
+            graduation_wsol_account: g.wsol_account,
+            graduation_lp_account: g.lp_account,
+            pool_state: g.pool,
+            raydium_program: riff::RAYDIUM_CPMM_PROGRAM_ID,
+            amm_config: RAYDIUM_AMM_CONFIG,
+            raydium_authority: g.raydium_authority,
+            lp_mint: g.lp_mint,
+            pool_token_vault: g.pool_token_vault,
+            pool_wsol_vault: g.pool_wsol_vault,
+            observation_state: g.observation,
+            create_pool_fee_receiver: riff::RAYDIUM_CREATE_POOL_FEE_RECEIVER,
+            wsol_mint: WSOL_MINT,
+            token_program: TOKEN_PROGRAM_ID,
+            token_2022_program: TOKEN_2022_ID,
+            associated_token_program: ATA_PROGRAM_ID,
+            system_program: system_program::ID,
+            rent: Pubkey::from_str_const("SysvarRent111111111111111111111111111111111"),
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// Graduates `mint` with a generous compute budget (Raydium's pool creation
+/// is heavy); `payer` pays and signs.
+#[allow(clippy::result_large_err)]
+pub fn graduate(svm: &mut LiteSVM, payer: &Keypair, mint: &Pubkey) -> TransactionResult {
+    send_many(
+        svm,
+        &[
+            compute_budget_ix(600_000),
+            graduate_ix(&payer.pubkey(), mint),
+        ],
+        &[payer],
+    )
+}
+
+/// Raydium `swap_base_input` selling `amount_in` of the coin for wrapped SOL.
+pub fn raydium_sell_ix(
+    trader: &Pubkey,
+    mint: &Pubkey,
+    amount_in: u64,
+    min_out: u64,
+) -> Instruction {
+    let g = graduation_accounts(mint);
+    let mut data = vec![143, 190, 90, 218, 196, 30, 51, 222];
+    data.extend_from_slice(&amount_in.to_le_bytes());
+    data.extend_from_slice(&min_out.to_le_bytes());
+    Instruction::new_with_bytes(
+        riff::RAYDIUM_CPMM_PROGRAM_ID,
+        &data,
+        vec![
+            AccountMeta::new_readonly(*trader, true),
+            AccountMeta::new_readonly(g.raydium_authority, false),
+            AccountMeta::new_readonly(RAYDIUM_AMM_CONFIG, false),
+            AccountMeta::new(g.pool, false),
+            AccountMeta::new(ata_for(trader, mint, &TOKEN_2022_ID), false),
+            AccountMeta::new(ata_for(trader, &WSOL_MINT, &TOKEN_PROGRAM_ID), false),
+            AccountMeta::new(g.pool_token_vault, false),
+            AccountMeta::new(g.pool_wsol_vault, false),
+            AccountMeta::new_readonly(TOKEN_2022_ID, false),
+            AccountMeta::new_readonly(TOKEN_PROGRAM_ID, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(WSOL_MINT, false),
+            AccountMeta::new(g.observation, false),
+        ],
+    )
+}
+
+/// ATA program CreateIdempotent for any token program.
+pub fn create_ata_for_ix(
+    payer: &Pubkey,
+    owner: &Pubkey,
+    mint: &Pubkey,
+    token_program: &Pubkey,
+) -> Instruction {
+    Instruction::new_with_bytes(
+        ATA_PROGRAM_ID,
+        &[1],
+        vec![
+            AccountMeta::new(*payer, true),
+            AccountMeta::new(ata_for(owner, mint, token_program), false),
+            AccountMeta::new_readonly(*owner, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(system_program::ID, false),
+            AccountMeta::new_readonly(*token_program, false),
+        ],
+    )
+}
+
+/// Token amount of any SPL / Token-2022 account (same offset in both).
+pub fn raw_token_balance(svm: &LiteSVM, account: &Pubkey) -> u64 {
+    let data = svm
+        .get_account(account)
+        .expect("token account missing")
+        .data;
+    u64::from_le_bytes(data[64..72].try_into().unwrap())
+}
+
+/// Supply of any SPL / Token-2022 mint.
+pub fn mint_supply(svm: &LiteSVM, mint: &Pubkey) -> u64 {
+    let data = svm.get_account(mint).expect("mint missing").data;
+    u64::from_le_bytes(data[36..44].try_into().unwrap())
 }

@@ -9,6 +9,7 @@ pub struct UpdateConfigParams {
     pub treasury: Option<Pubkey>,
     pub charity: Option<Pubkey>,
     pub verifier: Option<Pubkey>,
+    pub raydium_amm_config: Option<Pubkey>,
 }
 
 #[derive(Accounts)]
@@ -31,6 +32,7 @@ pub fn handle_update_config(ctx: Context<UpdateConfig>, params: UpdateConfigPara
         (&mut config.treasury, params.treasury),
         (&mut config.charity, params.charity),
         (&mut config.verifier, params.verifier),
+        (&mut config.raydium_amm_config, params.raydium_amm_config),
     ] {
         if let Some(key) = new {
             require_keys_neq!(key, Pubkey::default(), ErrorCode::InvalidAddress);
@@ -42,6 +44,7 @@ pub fn handle_update_config(ctx: Context<UpdateConfig>, params: UpdateConfigPara
         treasury: config.treasury,
         charity: config.charity,
         verifier: config.verifier,
+        raydium_amm_config: config.raydium_amm_config,
     });
     Ok(())
 }

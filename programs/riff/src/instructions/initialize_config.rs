@@ -10,6 +10,7 @@ pub struct ConfigParams {
     pub treasury: Pubkey,
     pub charity: Pubkey,
     pub verifier: Pubkey,
+    pub raydium_amm_config: Pubkey,
     /// Fee rates in basis points of each trade's SOL amount.
     pub artist_fee_bps: u16,
     pub creator_fee_bps: u16,
@@ -59,7 +60,12 @@ pub fn handle_initialize_config(
         ErrorCode::InvalidTradeFee
     );
     require!(params.claim_window_secs > 0, ErrorCode::InvalidClaimWindow);
-    for key in [params.treasury, params.charity, params.verifier] {
+    for key in [
+        params.treasury,
+        params.charity,
+        params.verifier,
+        params.raydium_amm_config,
+    ] {
         require_keys_neq!(key, Pubkey::default(), ErrorCode::InvalidAddress);
     }
     require!(
@@ -79,6 +85,7 @@ pub fn handle_initialize_config(
         treasury: params.treasury,
         charity: params.charity,
         verifier: params.verifier,
+        raydium_amm_config: params.raydium_amm_config,
         artist_fee_bps: params.artist_fee_bps,
         creator_fee_bps: params.creator_fee_bps,
         protocol_fee_bps: params.protocol_fee_bps,
@@ -95,6 +102,7 @@ pub fn handle_initialize_config(
         treasury: params.treasury,
         charity: params.charity,
         verifier: params.verifier,
+        raydium_amm_config: params.raydium_amm_config,
         artist_fee_bps: params.artist_fee_bps,
         creator_fee_bps: params.creator_fee_bps,
         protocol_fee_bps: params.protocol_fee_bps,

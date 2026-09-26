@@ -6,6 +6,7 @@ pub struct ConfigInitialized {
     pub treasury: Pubkey,
     pub charity: Pubkey,
     pub verifier: Pubkey,
+    pub raydium_amm_config: Pubkey,
     pub artist_fee_bps: u16,
     pub creator_fee_bps: u16,
     pub protocol_fee_bps: u16,
@@ -73,6 +74,7 @@ pub struct ConfigUpdated {
     pub treasury: Pubkey,
     pub charity: Pubkey,
     pub verifier: Pubkey,
+    pub raydium_amm_config: Pubkey,
 }
 
 #[event]
@@ -99,4 +101,19 @@ pub struct CharityFeesSwept {
     pub coin: Pubkey,
     pub charity: Pubkey,
     pub amount: u64,
+}
+
+#[event]
+pub struct Graduated {
+    pub coin: Pubkey,
+    pub mint: Pubkey,
+    pub pool: Pubkey,
+    /// SOL deposited into the pool: exactly what the curve raised.
+    pub sol_amount: u64,
+    /// Tokens deposited: exactly the graduation reserve.
+    pub token_amount: u64,
+    /// Every LP token minted to riff, burned so the liquidity is locked.
+    pub lp_burned: u64,
+    /// Pool-creation cost reimbursed to the caller from protocol fees.
+    pub cost_reimbursed: u64,
 }

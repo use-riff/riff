@@ -2225,6 +2225,8 @@ dependencies = [
  "anchor-spl",
  "base64 0.22.1",
  "litesvm",
+ "serde_json",
+ "solana-account",
  "solana-keypair",
  "solana-message",
  "solana-signer",
