@@ -12,6 +12,7 @@ use crate::{
     curve::{quote_buy, quote_sell, split_fee, BuyQuote, FeeSplit},
     error::ErrorCode,
     events::{CurveCompleted, Trade},
+    payout::pay_from_coin,
     state::{Coin, Config},
 };
 
@@ -22,8 +23,6 @@ pub struct Swap<'info> {
     pub trader: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
-    #[account(mut, address = config.treasury)]
-    pub treasury: SystemAccount<'info>,
     #[account(
         mut,
         seeds = [COIN_SEED, mint.key().as_ref()],
@@ -59,9 +58,7 @@ pub fn handle_buy(ctx: Context<Swap>, max_sol_in: u64, min_tokens_out: u64) -> R
         &a.system_program,
         &a.trader.to_account_info(),
         &a.coin.to_account_info(),
-        &a.treasury.to_account_info(),
         &quote,
-        &fees,
     )?;
     release_tokens(
         &a.token_program,
@@ -118,15 +115,9 @@ pub fn handle_sell(ctx: Context<Swap>, token_amount: u64, min_sol_out: u64) -> R
         COIN_DECIMALS,
     )?;
 
-    // The program owns the coin account, so it can debit lamports directly.
-    // The artist's and creator's fees are simply left behind on the coin.
-    let from_coin = quote
-        .sol_out
-        .checked_add(fees.protocol)
-        .ok_or(ErrorCode::MathOverflow)?;
-    debit(&coin.to_account_info(), from_coin)?;
-    credit(&a.trader.to_account_info(), quote.sol_out)?;
-    credit(&a.treasury.to_account_info(), fees.protocol)?;
+    // Paid out of the curve's SOL (already reduced above). All three fees
+    // are simply left behind on the coin.
+    pay_from_coin(coin, &a.trader.to_account_info(), quote.sol_out)?;
 
     emit_trade(
         coin,
@@ -162,23 +153,15 @@ pub(crate) fn settle_buy(
     Ok((quote, fees))
 }
 
-/// Buyer pays the curve SOL plus the artist's and creator's fees to the coin
-/// account, and the protocol's fee to the treasury.
+/// Buyer pays the curve SOL and every fee to the coin account. Fees wait
+/// there until the artist, creator, or protocol collects them.
 pub(crate) fn pay_for_buy<'info>(
     system_program: &Program<'info, System>,
     buyer: &AccountInfo<'info>,
     coin: &AccountInfo<'info>,
-    treasury: &AccountInfo<'info>,
     quote: &BuyQuote,
-    fees: &FeeSplit,
 ) -> Result<()> {
-    let to_coin = quote
-        .sol_to_curve
-        .checked_add(fees.artist)
-        .and_then(|v| v.checked_add(fees.creator))
-        .ok_or(ErrorCode::MathOverflow)?;
-    pay(system_program, buyer, coin, to_coin)?;
-    pay(system_program, buyer, treasury, fees.protocol)
+    pay(system_program, buyer, coin, quote.total_cost)
 }
 
 /// Sends tokens out of the vault, signed by the coin PDA.
@@ -250,6 +233,10 @@ fn accrue_fees(coin: &mut Coin, fees: &FeeSplit) -> Result<()> {
         .creator_fees
         .checked_add(fees.creator)
         .ok_or(ErrorCode::MathOverflow)?;
+    coin.protocol_fees = coin
+        .protocol_fees
+        .checked_add(fees.protocol)
+        .ok_or(ErrorCode::MathOverflow)?;
     Ok(())
 }
 
@@ -272,23 +259,4 @@ fn pay<'info>(
         ),
         lamports,
     )
-}
-
-/// Moves lamports out of a program-owned account.
-pub(crate) fn debit(account: &AccountInfo, lamports: u64) -> Result<()> {
-    let balance = account
-        .lamports()
-        .checked_sub(lamports)
-        .ok_or(ErrorCode::MathOverflow)?;
-    **account.try_borrow_mut_lamports()? = balance;
-    Ok(())
-}
-
-pub(crate) fn credit(account: &AccountInfo, lamports: u64) -> Result<()> {
-    let balance = account
-        .lamports()
-        .checked_add(lamports)
-        .ok_or(ErrorCode::MathOverflow)?;
-    **account.try_borrow_mut_lamports()? = balance;
-    Ok(())
 }

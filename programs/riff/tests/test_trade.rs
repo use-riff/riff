@@ -21,7 +21,7 @@ fn assert_coin_solvent(env: &Env, mint: &Pubkey) {
     let rent = env.svm.minimum_balance_for_rent_exemption(data_len);
     assert_eq!(
         lamports(&env.svm, &coin_key),
-        rent + coin.real_sol_reserves + coin.artist_fees + coin.creator_fees
+        rent + coin.real_sol_reserves + coin.artist_fees + coin.creator_fees + coin.protocol_fees
     );
     // Vault holds the unsold curve tokens plus the graduation reserve.
     assert_eq!(
@@ -56,7 +56,7 @@ fn buy_delivers_tokens_and_splits_fee() {
     let coin_lamports = lamports(&env.svm, &coin_key);
     let alice_lamports = lamports(&env.svm, &alice.pubkey());
 
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, SOL, quote.tokens_out);
+    let ix = buy_ix(&alice.pubkey(), &mint, SOL, quote.tokens_out);
     trade(&mut env, &alice, ix).unwrap();
 
     // 1% fee: 0.5% artist, 0.2% creator, 0.3% treasury.
@@ -71,12 +71,8 @@ fn buy_delivers_tokens_and_splits_fee() {
     );
     assert_eq!(lamports(&env.svm, &alice.pubkey()), alice_lamports - SOL);
     assert_eq!(
-        lamports(&env.svm, &env.treasury),
-        TREASURY_START + fees.protocol
-    );
-    assert_eq!(
         lamports(&env.svm, &coin_key),
-        coin_lamports + quote.sol_to_curve + fees.artist + fees.creator
+        coin_lamports + quote.total_cost
     );
 
     let after: riff::Coin = fetch(&env.svm, &coin_key);
@@ -86,6 +82,9 @@ fn buy_delivers_tokens_and_splits_fee() {
     );
     assert_eq!(after.artist_fees, fees.artist);
     assert_eq!(after.creator_fees, fees.creator);
+    assert_eq!(after.protocol_fees, fees.protocol);
+    // Trades never touch the treasury; its share waits on the coin.
+    assert_eq!(lamports(&env.svm, &env.treasury), TREASURY_START);
     assert!(!after.complete);
     assert_coin_solvent(&env, &mint);
 }
@@ -98,16 +97,15 @@ fn sell_returns_sol_minus_fee() {
     let alice_ata = ata_address(&alice.pubkey(), &mint);
     let coin_key = coin_address(&mint);
 
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, 2 * SOL, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, 2 * SOL, 0);
     trade(&mut env, &alice, ix).unwrap();
     let tokens = token_balance(&env.svm, &alice_ata);
     let before: riff::Coin = fetch(&env.svm, &coin_key);
     let alice_before = lamports(&env.svm, &alice.pubkey());
-    let treasury_before = lamports(&env.svm, &env.treasury);
 
     let quote = quote_sell(&before.reserves(), TOTAL_FEE_BPS, tokens).unwrap();
     let fees = split_fee(quote.fee, ARTIST_FEE_BPS, CREATOR_FEE_BPS, PROTOCOL_FEE_BPS);
-    let ix = sell_ix(&alice.pubkey(), &mint, &env.treasury, tokens, quote.sol_out);
+    let ix = sell_ix(&alice.pubkey(), &mint, tokens, quote.sol_out);
     trade(&mut env, &alice, ix).unwrap();
 
     assert_eq!(token_balance(&env.svm, &alice_ata), 0);
@@ -115,14 +113,11 @@ fn sell_returns_sol_minus_fee() {
         lamports(&env.svm, &alice.pubkey()),
         alice_before + quote.sol_out
     );
-    assert_eq!(
-        lamports(&env.svm, &env.treasury),
-        treasury_before + fees.protocol
-    );
 
     let after: riff::Coin = fetch(&env.svm, &coin_key);
     assert_eq!(after.artist_fees, before.artist_fees + fees.artist);
     assert_eq!(after.creator_fees, before.creator_fees + fees.creator);
+    assert_eq!(after.protocol_fees, before.protocol_fees + fees.protocol);
     assert_eq!(after.real_token_reserves, CURVE_TOKEN_SUPPLY);
     // A full round trip costs roughly two 1% fees, never profits.
     assert!(lamports(&env.svm, &alice.pubkey()) < 10 * SOL);
@@ -138,13 +133,7 @@ fn buy_rejects_slippage() {
 
     let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint));
     let quote = quote_buy(&coin.reserves(), TOTAL_FEE_BPS, SOL).unwrap();
-    let ix = buy_ix(
-        &alice.pubkey(),
-        &mint,
-        &env.treasury,
-        SOL,
-        quote.tokens_out + 1,
-    );
+    let ix = buy_ix(&alice.pubkey(), &mint, SOL, quote.tokens_out + 1);
     assert_riff_error(trade(&mut env, &alice, ix), ErrorCode::SlippageExceeded);
 }
 
@@ -153,19 +142,13 @@ fn sell_rejects_slippage() {
     let mut env = setup();
     let mint = setup_coin(&mut env);
     let alice = trader(&mut env.svm, &mint, 10 * SOL);
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, SOL, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, SOL, 0);
     trade(&mut env, &alice, ix).unwrap();
     let tokens = token_balance(&env.svm, &ata_address(&alice.pubkey(), &mint));
 
     let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint));
     let quote = quote_sell(&coin.reserves(), TOTAL_FEE_BPS, tokens).unwrap();
-    let ix = sell_ix(
-        &alice.pubkey(),
-        &mint,
-        &env.treasury,
-        tokens,
-        quote.sol_out + 1,
-    );
+    let ix = sell_ix(&alice.pubkey(), &mint, tokens, quote.sol_out + 1);
     assert_riff_error(trade(&mut env, &alice, ix), ErrorCode::SlippageExceeded);
 }
 
@@ -175,9 +158,9 @@ fn rejects_zero_amounts() {
     let mint = setup_coin(&mut env);
     let alice = trader(&mut env.svm, &mint, 10 * SOL);
 
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, 0, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, 0, 0);
     assert_riff_error(trade(&mut env, &alice, ix), ErrorCode::AmountTooSmall);
-    let ix = sell_ix(&alice.pubkey(), &mint, &env.treasury, 0, 0);
+    let ix = sell_ix(&alice.pubkey(), &mint, 0, 0);
     assert_riff_error(trade(&mut env, &alice, ix), ErrorCode::AmountTooSmall);
 }
 
@@ -188,10 +171,10 @@ fn cannot_sell_tokens_you_do_not_have() {
     let alice = trader(&mut env.svm, &mint, 10 * SOL);
     let bob = trader(&mut env.svm, &mint, 10 * SOL);
     // Alice's buy puts SOL in the curve, so the sell fails on Bob's balance.
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, 5 * SOL, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, 5 * SOL, 0);
     trade(&mut env, &alice, ix).unwrap();
 
-    let ix = sell_ix(&bob.pubkey(), &mint, &env.treasury, 1_000 * TOKEN, 0);
+    let ix = sell_ix(&bob.pubkey(), &mint, 1_000 * TOKEN, 0);
     assert!(trade(&mut env, &bob, ix).is_err());
     assert_coin_solvent(&env, &mint);
 }
@@ -202,11 +185,11 @@ fn cannot_use_someone_elses_token_account() {
     let mint = setup_coin(&mut env);
     let alice = trader(&mut env.svm, &mint, 10 * SOL);
     let bob = trader(&mut env.svm, &mint, 10 * SOL);
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, SOL, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, SOL, 0);
     trade(&mut env, &alice, ix).unwrap();
 
     // Bob signs, but points at Alice's token account.
-    let mut ix = sell_ix(&bob.pubkey(), &mint, &env.treasury, TOKEN, 0);
+    let mut ix = sell_ix(&bob.pubkey(), &mint, TOKEN, 0);
     let alice_ata = ata_address(&alice.pubkey(), &mint);
     let bob_ata = ata_address(&bob.pubkey(), &mint);
     for meta in &mut ix.accounts {
@@ -218,19 +201,6 @@ fn cannot_use_someone_elses_token_account() {
 }
 
 #[test]
-fn fees_must_go_to_configured_treasury() {
-    let mut env = setup();
-    let mint = setup_coin(&mut env);
-    let alice = trader(&mut env.svm, &mint, 10 * SOL);
-    let thief = Pubkey::new_unique();
-    env.svm.airdrop(&thief, TREASURY_START).unwrap();
-
-    let ix = buy_ix(&alice.pubkey(), &mint, &thief, SOL, 0);
-    assert!(trade(&mut env, &alice, ix).is_err());
-    assert_eq!(lamports(&env.svm, &thief), TREASURY_START);
-}
-
-#[test]
 fn final_buy_completes_curve_and_stops_trading() {
     let mut env = setup();
     let mint = setup_coin(&mut env);
@@ -238,7 +208,7 @@ fn final_buy_completes_curve_and_stops_trading() {
     let whale_ata = ata_address(&whale.pubkey(), &mint);
 
     // Far more than the curve needs: only the remainder is bought and paid for.
-    let ix = buy_ix(&whale.pubkey(), &mint, &env.treasury, 500 * SOL, 0);
+    let ix = buy_ix(&whale.pubkey(), &mint, 500 * SOL, 0);
     trade(&mut env, &whale, ix).unwrap();
 
     assert_eq!(token_balance(&env.svm, &whale_ata), CURVE_TOKEN_SUPPLY);
@@ -250,9 +220,9 @@ fn final_buy_completes_curve_and_stops_trading() {
     assert_eq!(coin.real_token_reserves, 0);
     assert_coin_solvent(&env, &mint);
 
-    let ix = buy_ix(&whale.pubkey(), &mint, &env.treasury, SOL, 0);
+    let ix = buy_ix(&whale.pubkey(), &mint, SOL, 0);
     assert_riff_error(trade(&mut env, &whale, ix), ErrorCode::CurveComplete);
-    let ix = sell_ix(&whale.pubkey(), &mint, &env.treasury, TOKEN, 0);
+    let ix = sell_ix(&whale.pubkey(), &mint, TOKEN, 0);
     assert_riff_error(trade(&mut env, &whale, ix), ErrorCode::CurveComplete);
 }
 
@@ -274,20 +244,20 @@ fn many_traders_round_trip_stays_solvent() {
     // Interleaved buys and partial sells.
     let amounts = [3 * SOL, SOL / 7, 11 * SOL, 123_456_789];
     for (t, amount) in traders.iter().zip(amounts) {
-        let ix = buy_ix(&t.pubkey(), &mint, &env.treasury, amount, 0);
+        let ix = buy_ix(&t.pubkey(), &mint, amount, 0);
         trade(&mut env, t, ix).unwrap();
         assert_coin_solvent(&env, &mint);
     }
     for t in &traders {
         let half = token_balance(&env.svm, &ata_address(&t.pubkey(), &mint)) / 2;
-        let ix = sell_ix(&t.pubkey(), &mint, &env.treasury, half, 0);
+        let ix = sell_ix(&t.pubkey(), &mint, half, 0);
         trade(&mut env, t, ix).unwrap();
         assert_coin_solvent(&env, &mint);
     }
     // Everyone exits, in reverse order.
     for t in traders.iter().rev() {
         let rest = token_balance(&env.svm, &ata_address(&t.pubkey(), &mint));
-        let ix = sell_ix(&t.pubkey(), &mint, &env.treasury, rest, 0);
+        let ix = sell_ix(&t.pubkey(), &mint, rest, 0);
         trade(&mut env, t, ix).unwrap();
         assert_coin_solvent(&env, &mint);
     }
@@ -303,10 +273,9 @@ fn many_traders_round_trip_stays_solvent() {
         coin.real_sol_reserves
     );
     assert!(coin.artist_fees > 0);
-    let protocol_fees = lamports(&env.svm, &env.treasury) - TREASURY_START;
     assert_eq!(
         traders_start - balances(&env),
-        protocol_fees + coin.artist_fees + coin.creator_fees + coin.real_sol_reserves
+        coin.artist_fees + coin.creator_fees + coin.protocol_fees + coin.real_sol_reserves
     );
 }
 
@@ -315,10 +284,10 @@ fn creator_withdraws_accrued_fees() {
     let mut env = setup();
     let (creator, mint) = setup_coin_with_creator(&mut env);
     let alice = trader(&mut env.svm, &mint, 10 * SOL);
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, 3 * SOL, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, 3 * SOL, 0);
     trade(&mut env, &alice, ix).unwrap();
     let tokens = token_balance(&env.svm, &ata_address(&alice.pubkey(), &mint));
-    let ix = sell_ix(&alice.pubkey(), &mint, &env.treasury, tokens / 2, 0);
+    let ix = sell_ix(&alice.pubkey(), &mint, tokens / 2, 0);
     trade(&mut env, &alice, ix).unwrap();
 
     let coin_key = coin_address(&mint);
@@ -352,7 +321,7 @@ fn only_creator_can_withdraw_creator_fees() {
     let mut env = setup();
     let mint = setup_coin(&mut env);
     let alice = trader(&mut env.svm, &mint, 10 * SOL);
-    let ix = buy_ix(&alice.pubkey(), &mint, &env.treasury, SOL, 0);
+    let ix = buy_ix(&alice.pubkey(), &mint, SOL, 0);
     trade(&mut env, &alice, ix).unwrap();
 
     let ix = withdraw_creator_fees_ix(&alice.pubkey(), &mint);
@@ -378,7 +347,7 @@ fn graduation_pool_opens_at_curve_final_price() {
     let mut env = setup();
     let mint = setup_coin(&mut env);
     let whale = trader(&mut env.svm, &mint, 1_000 * SOL);
-    let ix = buy_ix(&whale.pubkey(), &mint, &env.treasury, 500 * SOL, 0);
+    let ix = buy_ix(&whale.pubkey(), &mint, 500 * SOL, 0);
     trade(&mut env, &whale, ix).unwrap();
 
     let gap = graduation_price_gap(&env, &mint);
@@ -393,13 +362,13 @@ fn graduation_price_holds_after_mixed_trading() {
         .map(|_| trader(&mut env.svm, &mint, 1_000 * SOL))
         .collect();
     for (t, amount) in traders.iter().zip([7 * SOL, 13 * SOL + 7, SOL / 3]) {
-        let ix = buy_ix(&t.pubkey(), &mint, &env.treasury, amount, 0);
+        let ix = buy_ix(&t.pubkey(), &mint, amount, 0);
         trade(&mut env, t, ix).unwrap();
         let some = token_balance(&env.svm, &ata_address(&t.pubkey(), &mint)) / 3;
-        let ix = sell_ix(&t.pubkey(), &mint, &env.treasury, some, 0);
+        let ix = sell_ix(&t.pubkey(), &mint, some, 0);
         trade(&mut env, t, ix).unwrap();
     }
-    let ix = buy_ix(&traders[0].pubkey(), &mint, &env.treasury, 500 * SOL, 0);
+    let ix = buy_ix(&traders[0].pubkey(), &mint, 500 * SOL, 0);
     trade(&mut env, &traders[0], ix).unwrap();
 
     let gap = graduation_price_gap(&env, &mint);

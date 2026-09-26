@@ -1,7 +1,6 @@
 mod common;
 
 use {
-    anchor_lang::prelude::Pubkey,
     anchor_spl::{
         token_2022::{
             spl_token_2022::{
@@ -40,12 +39,7 @@ fn creates_coin() {
     let (mut env, creator) = setup_with_config();
     let mint = Keypair::new();
     let args = coin_args();
-    let ix = create_coin_ix(
-        &creator.pubkey(),
-        &mint.pubkey(),
-        &env.treasury,
-        args.clone(),
-    );
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args.clone());
     let meta = send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
 
     let coin_key = coin_address(&mint.pubkey());
@@ -138,12 +132,7 @@ fn accepts_max_length_fields() {
         creator_buy_sol: 0,
         creator_buy_min_tokens: 0,
     };
-    let ix = create_coin_ix(
-        &creator.pubkey(),
-        &mint.pubkey(),
-        &env.treasury,
-        args.clone(),
-    );
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args.clone());
     send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
 
     let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint.pubkey()));
@@ -235,7 +224,7 @@ fn rejects_invalid_args() {
         let mint = Keypair::new();
         let mut args = coin_args();
         set(&mut args, value);
-        let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), &env.treasury, args);
+        let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args);
         let res = send(&mut env.svm, ix, &[&creator, &mint]);
         assert!(res.is_err(), "{label}: should fail");
         assert_riff_error(res, expected);
@@ -251,12 +240,7 @@ fn requires_config() {
     let mut env = setup();
     let creator = funded_keypair(&mut env.svm);
     let mint = Keypair::new();
-    let ix = create_coin_ix(
-        &creator.pubkey(),
-        &mint.pubkey(),
-        &env.treasury,
-        coin_args(),
-    );
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
     assert!(send(&mut env.svm, ix, &[&creator, &mint]).is_err());
 }
 
@@ -264,12 +248,7 @@ fn requires_config() {
 fn requires_mint_signature() {
     let (mut env, creator) = setup_with_config();
     let mint = Keypair::new();
-    let mut ix = create_coin_ix(
-        &creator.pubkey(),
-        &mint.pubkey(),
-        &env.treasury,
-        coin_args(),
-    );
+    let mut ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
     for meta in &mut ix.accounts {
         if meta.pubkey == mint.pubkey() {
             meta.is_signer = false;
@@ -287,12 +266,7 @@ fn claim_deadline_uses_config_window_at_creation() {
     env.svm.set_sysvar(&clock);
 
     let mint = Keypair::new();
-    let ix = create_coin_ix(
-        &creator.pubkey(),
-        &mint.pubkey(),
-        &env.treasury,
-        coin_args(),
-    );
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
     send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
 
     let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint.pubkey()));
@@ -305,12 +279,7 @@ fn same_artist_can_have_multiple_coins() {
     let (mut env, creator) = setup_with_config();
     for _ in 0..2 {
         let mint = Keypair::new();
-        let ix = create_coin_ix(
-            &creator.pubkey(),
-            &mint.pubkey(),
-            &env.treasury,
-            coin_args(),
-        );
+        let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
         send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
     }
 }
@@ -337,16 +306,12 @@ fn creator_buys_at_launch() {
     args.creator_buy_min_tokens = quote.tokens_out;
     let fees = riff::curve::split_fee(quote.fee, ARTIST_FEE_BPS, CREATOR_FEE_BPS, PROTOCOL_FEE_BPS);
 
-    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), &env.treasury, args);
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args);
     let meta = send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
 
     // Same price and fees as any buyer on a fresh curve.
     let creator_ata = ata_address(&creator.pubkey(), &mint.pubkey());
     assert_eq!(token_balance(&env.svm, &creator_ata), quote.tokens_out);
-    assert_eq!(
-        lamports(&env.svm, &env.treasury),
-        TREASURY_START + fees.protocol
-    );
     let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint.pubkey()));
     assert_eq!(coin.real_sol_reserves, quote.sol_to_curve);
     assert_eq!(
@@ -355,6 +320,7 @@ fn creator_buys_at_launch() {
     );
     assert_eq!(coin.artist_fees, fees.artist);
     assert_eq!(coin.creator_fees, fees.creator);
+    assert_eq!(coin.protocol_fees, fees.protocol);
 
     // Visible to indexers: in CoinCreated, and as a regular Trade.
     let created = events::<riff::events::CoinCreated>(&meta.logs);
@@ -390,7 +356,7 @@ fn creator_buy_is_capped_at_3_percent_of_supply() {
     let mint = Keypair::new();
     let mut args = coin_args();
     args.creator_buy_sol = max_sol + 1;
-    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), &env.treasury, args);
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args);
     assert_riff_error(
         send(&mut env.svm, ix, &[&creator, &mint]),
         ErrorCode::CreatorBuyTooLarge,
@@ -400,21 +366,10 @@ fn creator_buy_is_capped_at_3_percent_of_supply() {
     // Exactly at the cap succeeds.
     let mut args = coin_args();
     args.creator_buy_sol = max_sol;
-    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), &env.treasury, args);
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args);
     send(&mut env.svm, ix, &[&creator, &mint]).unwrap();
     let bought = token_balance(&env.svm, &ata_address(&creator.pubkey(), &mint.pubkey()));
     assert!(bought <= cap && bought > cap - TOKEN, "bought {bought}");
-}
-
-#[test]
-fn creator_buy_fees_go_to_configured_treasury() {
-    let (mut env, creator) = setup_with_config();
-    let mint = Keypair::new();
-    let thief = Pubkey::new_unique();
-    let mut args = coin_args();
-    args.creator_buy_sol = SOL / 10;
-    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), &thief, args);
-    assert!(send(&mut env.svm, ix, &[&creator, &mint]).is_err());
 }
 
 #[test]
@@ -425,7 +380,7 @@ fn creator_buy_respects_min_tokens() {
     let mut args = coin_args();
     args.creator_buy_sol = SOL / 2;
     args.creator_buy_min_tokens = quote.tokens_out + 1;
-    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), &env.treasury, args);
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), args);
     assert_riff_error(
         send(&mut env.svm, ix, &[&creator, &mint]),
         ErrorCode::SlippageExceeded,

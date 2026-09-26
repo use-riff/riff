@@ -34,4 +34,8 @@ pub enum ErrorCode {
     CreatorBuyTooLarge,
     #[msg("No fees to withdraw")]
     NoFeesToWithdraw,
+    #[msg("Collection would leave the treasury below the rent-exempt minimum")]
+    TreasuryNotRentExempt,
+    #[msg("Payout would leave the coin account unable to cover what it owes")]
+    CoinUnderfunded,
 }

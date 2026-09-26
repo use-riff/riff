@@ -7,8 +7,9 @@ use crate::{constants::*, curve::Reserves};
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Pubkey,
-    /// Receives the protocol's share of trading fees. Must stay funded above
-    /// the rent-exempt minimum or small fee transfers to it fail.
+    /// Receives the protocol's share of trading fees, in batches, via the
+    /// permissionless `collect_protocol_fees`. Trades never touch it, so it
+    /// needn't sign or exist in advance (e.g. a Squads vault).
     pub treasury: Pubkey,
     /// Trading fee rates, each in basis points of a trade's SOL amount. Their
     /// sum is the total fee charged.
@@ -47,8 +48,8 @@ impl Config {
 /// The artist is recorded only as text until they claim the coin; until then
 /// `artist` is `None` and nothing implies the artist is affiliated with it.
 ///
-/// Holds the curve's SOL and the unpaid artist and creator fees as lamports,
-/// on top of its own rent.
+/// Holds the curve's SOL and all uncollected fees as lamports, on top of its
+/// own rent.
 #[account]
 #[derive(InitSpace)]
 pub struct Coin {
@@ -74,6 +75,8 @@ pub struct Coin {
     pub artist_fees: u64,
     /// Creator fees accrued and not yet withdrawn, in lamports.
     pub creator_fees: u64,
+    /// Protocol fees accrued and not yet collected to the treasury, in lamports.
+    pub protocol_fees: u64,
     /// Every curve token has been sold; trading stops until graduation.
     pub complete: bool,
     pub bump: u8,
