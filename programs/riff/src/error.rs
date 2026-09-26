@@ -56,6 +56,8 @@ pub enum ErrorCode {
     NotArtist,
     #[msg("Only the config admin can do this")]
     NotAdmin,
+    #[msg("Only the proposed admin can accept")]
+    NotPendingAdmin,
     #[msg("The curve hasn't sold out yet")]
     CurveNotComplete,
     #[msg("This coin has already graduated")]

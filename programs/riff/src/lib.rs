@@ -61,4 +61,12 @@ pub mod riff {
     pub fn graduate(ctx: Context<Graduate>) -> Result<()> {
         crate::instructions::graduate::handle_graduate(ctx)
     }
+
+    pub fn transfer_admin(ctx: Context<TransferAdmin>, new_admin: Pubkey) -> Result<()> {
+        crate::instructions::transfer_admin::handle_transfer_admin(ctx, new_admin)
+    }
+
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        crate::instructions::transfer_admin::handle_accept_admin(ctx)
+    }
 }

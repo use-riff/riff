@@ -117,3 +117,15 @@ pub struct Graduated {
     /// Pool-creation cost reimbursed to the caller from protocol fees.
     pub cost_reimbursed: u64,
 }
+
+#[event]
+pub struct AdminTransferProposed {
+    pub admin: Pubkey,
+    pub pending_admin: Pubkey,
+}
+
+#[event]
+pub struct AdminTransferred {
+    pub previous_admin: Pubkey,
+    pub admin: Pubkey,
+}

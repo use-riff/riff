@@ -7,6 +7,8 @@ use crate::{constants::*, curve::Reserves};
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Pubkey,
+    /// Proposed next admin; becomes admin only by signing `accept_admin`.
+    pub pending_admin: Option<Pubkey>,
     /// Receives the protocol's share of trading fees, in batches, via the
     /// permissionless `collect_protocol_fees`. Trades never touch it, so it
     /// needn't sign or exist in advance (e.g. a Squads vault).
