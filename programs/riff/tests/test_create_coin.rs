@@ -1,6 +1,7 @@
 mod common;
 
 use {
+    anchor_lang::prelude::Pubkey,
     anchor_spl::{
         token_2022::{
             spl_token_2022::{
@@ -63,10 +64,10 @@ fn creates_coin() {
     assert!(mint_state.base.mint_authority.is_none());
     assert!(mint_state.base.freeze_authority.is_none());
 
-    // Metadata lives on the mint itself.
+    // Metadata lives on the mint itself, and nobody can change it.
     let pointer = mint_state.get_extension::<MetadataPointer>().unwrap();
     assert_eq!(Option::from(pointer.metadata_address), Some(mint.pubkey()));
-    assert_eq!(Option::from(pointer.authority), Some(coin_key));
+    assert_eq!(Option::<Pubkey>::from(pointer.authority), None);
     let metadata = mint_state
         .get_variable_len_extension::<TokenMetadata>()
         .unwrap();
@@ -74,7 +75,7 @@ fn creates_coin() {
     assert_eq!(metadata.name, args.name);
     assert_eq!(metadata.symbol, args.symbol);
     assert_eq!(metadata.uri, args.uri);
-    assert_eq!(Option::from(metadata.update_authority), Some(coin_key));
+    assert_eq!(Option::<Pubkey>::from(metadata.update_authority), None);
     assert!(metadata.additional_metadata.is_empty());
 
     // Rent-exempt after the metadata realloc.
@@ -386,4 +387,28 @@ fn creator_buy_respects_min_tokens() {
         ErrorCode::SlippageExceeded,
     );
     assert!(env.svm.get_account(&mint.pubkey()).is_none());
+}
+
+#[test]
+fn nobody_can_rename_a_coin_after_launch() {
+    use anchor_spl::token_interface::spl_token_metadata_interface::{
+        instruction::update_field, state::Field,
+    };
+    let mut env = setup();
+    let (creator, mint) = setup_coin_with_creator(&mut env);
+    // With the authority revoked, Token-2022 refuses every update, whoever signs.
+    for signer in [&creator, &env.admin.insecure_clone()] {
+        let ix = update_field(
+            &TOKEN_2022_ID,
+            &mint,
+            &signer.pubkey(),
+            Field::Name,
+            "Someone Else".into(),
+        );
+        assert!(send(&mut env.svm, ix, &[signer]).is_err());
+    }
+    let account = env.svm.get_account(&mint).unwrap();
+    let state = StateWithExtensions::<Mint>::unpack(&account.data).unwrap();
+    let metadata = state.get_variable_len_extension::<TokenMetadata>().unwrap();
+    assert_eq!(metadata.name, coin_args().name);
 }
