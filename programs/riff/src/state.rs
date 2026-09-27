@@ -97,6 +97,9 @@ pub struct Coin {
     pub complete: bool,
     /// Raydium pool the coin graduated to. Set once, by `graduate`.
     pub pool: Option<Pubkey>,
+    /// Curve SOL handed to the graduation authority by `prepare_graduation`
+    /// and not yet deposited in the pool (0 before and after graduation).
+    pub graduation_sol: u64,
     pub bump: u8,
     pub vault_bump: u8,
 }
