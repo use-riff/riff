@@ -421,6 +421,7 @@ fn admin_can_move_treasury_and_charity() {
             treasury: Some(treasury),
             charity: Some(charity),
             verifier: None,
+            raydium_amm_config: None,
         },
     );
     send(&mut l.env.svm, ix, &[&admin]).unwrap();

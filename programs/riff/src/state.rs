@@ -17,6 +17,8 @@ pub struct Config {
     /// Co-signs every `claim_artist`, vouching that the claiming wallet
     /// belongs to the coin's artist. Held by riff's verification service.
     pub verifier: Pubkey,
+    /// Raydium CPMM fee tier (`AmmConfig` account) graduated coins' pools use.
+    pub raydium_amm_config: Pubkey,
     /// Trading fee rates, each in basis points of a trade's SOL amount. Their
     /// sum is the total fee charged.
     pub artist_fee_bps: u16,
@@ -91,6 +93,8 @@ pub struct Coin {
     pub protocol_fees: u64,
     /// Every curve token has been sold; trading stops until graduation.
     pub complete: bool,
+    /// Raydium pool the coin graduated to. Set once, by `graduate`.
+    pub pool: Option<Pubkey>,
     pub bump: u8,
     pub vault_bump: u8,
 }

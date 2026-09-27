@@ -57,4 +57,8 @@ pub mod riff {
     pub fn update_config(ctx: Context<UpdateConfig>, params: UpdateConfigParams) -> Result<()> {
         crate::instructions::update_config::handle_update_config(ctx, params)
     }
+
+    pub fn graduate(ctx: Context<Graduate>) -> Result<()> {
+        crate::instructions::graduate::handle_graduate(ctx)
+    }
 }
