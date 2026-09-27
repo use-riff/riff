@@ -58,7 +58,7 @@ pub fn handle_buy(ctx: Context<Swap>, max_sol_in: u64, min_tokens_out: u64) -> R
     );
     let (quote, fees) = settle_buy(&a.config, &mut a.coin, max_sol_in)?;
     require!(
-        quote.tokens_out >= min_tokens_out,
+        within_price_limit(&quote, max_sol_in, min_tokens_out),
         ErrorCode::SlippageExceeded
     );
     pay_for_buy(
@@ -134,6 +134,17 @@ pub fn handle_sell(ctx: Context<Swap>, token_amount: u64, min_sol_out: u64) -> R
         token_amount,
         &fees,
     )
+}
+
+/// Slippage on a buy bounds the price, not the quantity: the trader must pay
+/// no more per token than `max_sol_in / min_tokens_out`. A normal buy spends
+/// all of `max_sol_in`, so this is exactly `tokens_out >= min_tokens_out`. The
+/// final buy is trimmed to what the curve has left and charged only for that,
+/// so a quantity bound would let anyone fail it by buying a little first;
+/// the price bound still passes as long as the trader's price holds.
+fn within_price_limit(quote: &BuyQuote, max_sol_in: u64, min_tokens_out: u64) -> bool {
+    quote.tokens_out as u128 * max_sol_in as u128
+        >= min_tokens_out as u128 * quote.total_cost as u128
 }
 
 /// Prices a buy against the coin's curve and records it on the coin. The

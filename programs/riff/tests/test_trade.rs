@@ -230,6 +230,72 @@ fn final_buy_completes_curve_and_stops_trading() {
     assert_riff_error(trade(&mut env, &whale, ix), ErrorCode::CurveComplete);
 }
 
+/// Buys until only `left` curve tokens remain.
+fn buy_until_left(env: &mut Env, mint: &Pubkey, buyer: &Keypair, left: u64) {
+    let coin: riff::Coin = fetch(&env.svm, &coin_address(mint));
+    let r = coin.reserves();
+    let want = (r.real_token - left) as u128;
+    let (vs, vt) = (r.virtual_sol as u128, r.virtual_token as u128);
+    let net = (vs * want).div_ceil(vt - want);
+    let total = (net * 10_000).div_ceil(10_000 - TOTAL_FEE_BPS as u128) as u64;
+    trade(env, buyer, buy_ix(&buyer.pubkey(), mint, total, 0)).unwrap();
+}
+
+#[test]
+fn final_buy_survives_a_small_buy_landing_first() {
+    let mut env = setup();
+    let mint = setup_coin(&mut env);
+    let whale = trader(&mut env.svm, &mint, 1_000 * SOL);
+    let alice = trader(&mut env.svm, &mint, 100 * SOL);
+    let bob = trader(&mut env.svm, &mint, 10 * SOL);
+    buy_until_left(&mut env, &mint, &whale, 10_000_000 * TOKEN);
+
+    // Alice offers 10 SOL for the rest: at least all the tokens left.
+    let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint));
+    let left = coin.real_token_reserves;
+    let quote = quote_buy(&coin.reserves(), TOTAL_FEE_BPS, 10 * SOL).unwrap();
+    assert_eq!(quote.tokens_out, left, "trimmed to the remainder");
+
+    // Bob buys a little first, so fewer tokens are left than Alice asked for.
+    trade(&mut env, &bob, buy_ix(&bob.pubkey(), &mint, SOL / 10, 0)).unwrap();
+
+    // Her buy still goes through: she gets what's left, at a price within her terms.
+    let before = lamports(&env.svm, &alice.pubkey());
+    trade(
+        &mut env,
+        &alice,
+        buy_ix(&alice.pubkey(), &mint, 10 * SOL, left),
+    )
+    .unwrap();
+    let got = token_balance(&env.svm, &ata_address(&alice.pubkey(), &mint));
+    assert!(got < left && got > 0);
+    let paid = before - lamports(&env.svm, &alice.pubkey());
+    assert!(paid as u128 * left as u128 <= 10 * SOL as u128 * got as u128);
+    let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint));
+    assert!(coin.complete);
+    assert_coin_solvent(&env, &mint);
+}
+
+#[test]
+fn final_buy_still_fails_when_the_price_moves_past_the_limit() {
+    let mut env = setup();
+    let mint = setup_coin(&mut env);
+    let whale = trader(&mut env.svm, &mint, 1_000 * SOL);
+    let alice = trader(&mut env.svm, &mint, 100 * SOL);
+    let bob = trader(&mut env.svm, &mint, 10 * SOL);
+    buy_until_left(&mut env, &mint, &whale, 10_000_000 * TOKEN);
+
+    // Alice offers exactly the quoted cost of the remainder: her price is the
+    // remainder's average price.
+    let coin: riff::Coin = fetch(&env.svm, &coin_address(&mint));
+    let quote = quote_buy(&coin.reserves(), TOTAL_FEE_BPS, 10 * SOL).unwrap();
+    trade(&mut env, &bob, buy_ix(&bob.pubkey(), &mint, SOL / 10, 0)).unwrap();
+
+    // What's left after Bob is the dearest part of the curve, above her price.
+    let ix = buy_ix(&alice.pubkey(), &mint, quote.total_cost, quote.tokens_out);
+    assert_riff_error(trade(&mut env, &alice, ix), ErrorCode::SlippageExceeded);
+}
+
 #[test]
 fn many_traders_round_trip_stays_solvent() {
     let mut env = setup();
