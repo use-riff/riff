@@ -71,8 +71,14 @@ jobs:
       - name: Build (SBPF v0)
         run: make build
 
+      - name: Build for devnet
+        run: make build-devnet
+
       - name: Test
         run: cargo test
+
+      - name: Test devnet addresses
+        run: cargo test -p riff --lib --features devnet
 
       - name: Clippy
         run: make lint

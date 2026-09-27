@@ -49,11 +49,20 @@ pub const POOL_SEED: &[u8] = b"pool";
 /// caller fronts; whatever isn't spent is refunded in the same transaction.
 pub const GRADUATION_RENT_ALLOWANCE: u64 = 100_000_000;
 
-/// Raydium CPMM (constant-product) program, mainnet. Apache-2.0.
+/// Raydium CPMM (constant-product) program. Apache-2.0.
+/// Mainnet by default; the `devnet` feature switches to Raydium's devnet
+/// deployment (the fee tier is chosen per deployment in the config).
+#[cfg(not(feature = "devnet"))]
 pub const RAYDIUM_CPMM_PROGRAM_ID: Pubkey = pubkey!("CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C");
+#[cfg(feature = "devnet")]
+pub const RAYDIUM_CPMM_PROGRAM_ID: Pubkey = pubkey!("DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb");
 /// Raydium's pool-creation fee receiver (a wrapped-SOL token account).
+#[cfg(not(feature = "devnet"))]
 pub const RAYDIUM_CREATE_POOL_FEE_RECEIVER: Pubkey =
     pubkey!("DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8");
+#[cfg(feature = "devnet")]
+pub const RAYDIUM_CREATE_POOL_FEE_RECEIVER: Pubkey =
+    pubkey!("3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy");
 pub const RAYDIUM_AUTH_SEED: &[u8] = b"vault_and_lp_mint_auth_seed";
 pub const RAYDIUM_POOL_LP_MINT_SEED: &[u8] = b"pool_lp_mint";
 pub const RAYDIUM_POOL_VAULT_SEED: &[u8] = b"pool_vault";
@@ -64,3 +73,27 @@ pub const RAYDIUM_INITIALIZE_DISCRIMINATOR: [u8; 8] = [175, 175, 109, 31, 13, 15
 /// (8 discriminator + bump u8 + disable_create_pool bool + index u16 +
 /// trade/protocol/fund fee rates 3 x u64).
 pub const RAYDIUM_AMM_CONFIG_CREATE_POOL_FEE_OFFSET: usize = 36;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Guards against the two clusters' addresses being swapped. CI runs
+    /// this with and without `--features devnet`.
+    #[test]
+    fn raydium_addresses_match_the_cluster() {
+        let (program, receiver) = if cfg!(feature = "devnet") {
+            (
+                "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
+                "3oE58BKVt8KuYkGxx8zBojugnymWmBiyafWgMrnb6eYy",
+            )
+        } else {
+            (
+                "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+                "DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8",
+            )
+        };
+        assert_eq!(RAYDIUM_CPMM_PROGRAM_ID.to_string(), program);
+        assert_eq!(RAYDIUM_CREATE_POOL_FEE_RECEIVER.to_string(), receiver);
+    }
+}

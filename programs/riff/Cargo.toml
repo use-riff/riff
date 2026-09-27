@@ -18,6 +18,8 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
+# Use Raydium's devnet addresses instead of mainnet. Built by `make build-devnet`.
+devnet = []
 
 
 [dependencies]
