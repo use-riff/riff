@@ -234,6 +234,10 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         complete: false,
         pool: None,
         graduation_sol: 0,
+        artist_fees_total: 0,
+        peak_virtual_sol: config.initial_virtual_sol_reserves,
+        volume_hourly: [0; VOLUME_HOURS],
+        volume_hour: now.div_euclid(3600),
         bump,
         vault_bump: ctx.bumps.vault,
     });

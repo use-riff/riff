@@ -74,6 +74,9 @@ pub const RAYDIUM_INITIALIZE_DISCRIMINATOR: [u8; 8] = [175, 175, 109, 31, 13, 15
 /// trade/protocol/fund fee rates 3 x u64).
 pub const RAYDIUM_AMM_CONFIG_CREATE_POOL_FEE_OFFSET: usize = 36;
 
+/// Hours of trade volume each coin keeps, one bucket per hour (rolling 24h volume).
+pub const VOLUME_HOURS: usize = 24;
+
 #[cfg(test)]
 mod tests {
     use super::*;

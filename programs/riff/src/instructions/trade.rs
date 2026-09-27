@@ -106,7 +106,7 @@ pub fn handle_sell(ctx: Context<Swap>, token_amount: u64, min_sol_out: u64) -> R
         .apply_sell(token_amount, &quote)
         .ok_or(ErrorCode::MathOverflow)?;
     coin.set_reserves(next);
-    accrue_fees(coin, &fees)?;
+    accrue_fees(coin, quote.sol_from_curve, &fees)?;
 
     transfer_checked(
         CpiContext::new(
@@ -156,7 +156,7 @@ pub(crate) fn settle_buy(
     let next = reserves.apply_buy(&quote).ok_or(ErrorCode::MathOverflow)?;
     coin.set_reserves(next);
     coin.complete = next.real_token == 0;
-    accrue_fees(coin, &fees)?;
+    accrue_fees(coin, quote.sol_to_curve, &fees)?;
     Ok((quote, fees))
 }
 
@@ -231,8 +231,13 @@ pub(crate) fn emit_trade(
     Ok(())
 }
 
-fn accrue_fees(coin: &mut Coin, fees: &FeeSplit) -> Result<()> {
-    coin.accrue_artist_share(fees.artist, Clock::get()?.unix_timestamp)
+/// Books a trade's fees on the coin and adds the trade (`sol` into or out of
+/// the curve) to the coin's running totals.
+fn accrue_fees(coin: &mut Coin, sol: u64, fees: &FeeSplit) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    coin.accrue_artist_share(fees.artist, now)
+        .ok_or(ErrorCode::MathOverflow)?;
+    coin.record_trade(sol, fees.artist, now)
         .ok_or(ErrorCode::MathOverflow)?;
     coin.creator_fees = coin
         .creator_fees
