@@ -12,8 +12,9 @@ use anchor_spl::{
     },
     token_interface::{
         mint_to_checked, spl_pod::optional_keys::OptionalNonZeroPubkey,
-        spl_token_metadata_interface::state::TokenMetadata, token_metadata_initialize, Mint,
-        MintToChecked, TokenAccount, TokenMetadataInitialize,
+        spl_token_metadata_interface::state::TokenMetadata, token_metadata_initialize,
+        token_metadata_update_authority, Mint, MintToChecked, TokenAccount,
+        TokenMetadataInitialize, TokenMetadataUpdateAuthority,
     },
 };
 
@@ -190,6 +191,34 @@ pub fn handle_create_coin(ctx: Context<CreateCoin>, args: CreateCoinArgs) -> Res
         ),
         COIN_TOTAL_SUPPLY,
         COIN_DECIMALS,
+    )?;
+
+    // Final metadata: nobody, riff included, can rename the coin or point it
+    // at other metadata once people have bought it.
+    token_metadata_update_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(),
+            TokenMetadataUpdateAuthority {
+                program_id: ctx.accounts.token_program.to_account_info(),
+                metadata: mint_info.clone(),
+                current_authority: ctx.accounts.coin.to_account_info(),
+                new_authority: ctx.accounts.coin.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        OptionalNonZeroPubkey::default(),
+    )?;
+    set_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(),
+            SetAuthority {
+                current_authority: ctx.accounts.coin.to_account_info(),
+                account_or_mint: mint_info.clone(),
+            },
+            signer_seeds,
+        ),
+        AuthorityType::MetadataPointer,
+        None,
     )?;
 
     // Fixed supply: nobody can ever mint again.
