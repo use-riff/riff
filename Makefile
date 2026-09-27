@@ -2,17 +2,21 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet test fmt lint clean deploy-devnet devnet-config idl
+.PHONY: build build-devnet test fmt lint clean deploy-devnet idl vectors
 
 build:
 	anchor build --arch $(ARCH)
 
-# Copy the program's interface (IDL + TypeScript types) into the TypeScript
-# client, which is committed so the app builds without Rust. CI fails if the
-# copy is stale.
+# Publish the program's interface (IDL + TypeScript types) in idl/, so
+# clients can use it without building Rust. CI fails if it's stale.
 idl: build
-	cp target/idl/riff.json clients/ts/src/idl/riff.json
-	cp target/types/riff.ts clients/ts/src/idl/riff.ts
+	mkdir -p idl
+	cp target/idl/riff.json idl/riff.json
+	cp target/types/riff.ts idl/riff.ts
+
+# Regenerate vectors/curve.json from the program's curve math.
+vectors:
+	cargo test -p riff --test curve_vectors -- --ignored
 
 # Devnet build (Raydium's devnet addresses), saved as riff-devnet.so so it
 # can't be mistaken for the mainnet riff.so. Then rebuilds the mainnet
@@ -34,14 +38,10 @@ lint:
 clean:
 	anchor clean
 
-# Devnet deployment (keys in ~/.config/riff/devnet, settings in deploy/devnet.json).
+# Devnet deployment (keys in ~/.config/riff/devnet, never in the repo).
 DEVNET_KEYS ?= $(HOME)/.config/riff/devnet
 
 deploy-devnet: build-devnet
 	solana program deploy target/deploy/riff-devnet.so \
 	  --program-id target/deploy/riff-keypair.json \
 	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
-
-# Dry run; add ARGS=--yes to send.
-devnet-config:
-	pnpm -C scripts init-config --cluster devnet $(ARGS)

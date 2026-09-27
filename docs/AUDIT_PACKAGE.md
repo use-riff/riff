@@ -1,7 +1,6 @@
 # riff: audit package
 
-Everything an external auditor needs to quote and start. Send this with
-access to the repository.
+Everything an external auditor needs to quote and start.
 
 ## What riff is
 
@@ -11,18 +10,18 @@ trade on a bonding curve; when the curve sells out, liquidity moves to a
 Raydium pool and is locked. A share of every trading fee goes to the
 artist, or to charity if the artist never claims.
 
-Not deployed yet. Real user funds will be held by the program.
+Live on devnet for testing; not on mainnet yet. Real user funds will be
+held by the program.
 
 ## Scope
 
 - **Program:** `programs/riff/src/` — Anchor 1.2.0, Rust 1.89, built for
-  SBPF v0. ~2,400 lines, 13 instructions:
+  SBPF v0. 14 instructions:
   `initialize_config`, `update_config`, `transfer_admin`, `accept_admin`,
-  `create_coin`, `buy`, `sell`, `graduate`, `claim_artist`,
+  `create_coin`, `buy`, `sell`, `prepare_graduation`, `graduate`, `claim_artist`,
   `withdraw_artist_fees`, `withdraw_creator_fees`, `collect_protocol_fees`,
   `sweep_charity_fees`.
-- **Commit:** to be fixed once the open PRs are merged into `main`
-  (artist claim, graduation, launch readiness).
+- **Commit:** the `main` commit named in the audit engagement.
 - **Out of scope:** Anchor, Token-2022, the ATA program, Raydium CPMM
   itself, and all off-chain code (app, indexer, verification server).
 
@@ -33,7 +32,7 @@ Not deployed yet. Real user funds will be held by the program.
 | `Config` | `["config"]` | Admin, treasury, charity, verifier, fee rates, curve settings, Raydium fee tier |
 | `Coin` | `["coin", mint]` | Curve reserves and all fee balances; its lamports back them |
 | Vault | `["vault", mint]` | Token-2022 account holding unsold curve tokens + the graduation reserve |
-| Graduation authority | `["graduation", mint]` | System-owned; holds SOL only during `graduate` |
+| Graduation authority | `["graduation", mint]` | System-owned; holds the curve SOL between `prepare_graduation` and `graduate` |
 | Pool address | `["pool", mint]` | Signs Raydium pool creation; Raydium owns it afterwards |
 
 - **Mint:** Token-2022, 6 decimals, 1B fixed supply, only MetadataPointer
@@ -69,8 +68,7 @@ Not deployed yet. Real user funds will be held by the program.
 
 ## Known issues and accepted risks
 
-From the internal review (`SECURITY_REVIEW.md` on branch `security/review`;
-it should be updated and merged before the audit):
+From riff's internal review (shared with the auditor):
 
 - Creators can still buy from other wallets from the slot after launch;
   only same-slot bundling is blocked.
@@ -91,12 +89,9 @@ Linux or WSL with Rust (pinned by `rust-toolchain.toml`), Agave/Solana CLI
 
 ```bash
 make build   # SBPF v0
-make test    # 93 tests, no validator needed
+make test    # 105 tests, no validator needed
 make lint
 ```
-
-`tests/security_findings.rs` (on `security/review`) holds one test per
-internal finding; each should pass once its fix is merged.
 
 ## Questions we'd like the audit to answer
 

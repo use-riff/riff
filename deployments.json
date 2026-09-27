@@ -1,0 +1,29 @@
+{
+  "program": "riff",
+  "source": "https://github.com/use-riff/riff",
+  "build": {
+    "anchor": "1.2.0",
+    "rust": "1.89.0",
+    "solanaCli": "4.1.2",
+    "sbpfArch": "v0",
+    "mainnet": "make build",
+    "devnet": "make build-devnet (cargo feature \"devnet\": Raydium's devnet addresses)"
+  },
+  "clusters": {
+    "devnet": {
+      "status": "live, for testing",
+      "programId": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV",
+      "config": "96rEETSfoVcoUVjtBffBhjutmyynSrRfgDfjC3X7P4hK",
+      "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
+      "raydiumCpmm": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
+      "raydiumAmmConfig": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
+      "notes": "Curve starts at 0.3 SOL virtual reserves (100x cheaper than mainnet) and a 1-hour claim window, so demos can sell out and graduate with devnet SOL."
+    },
+    "mainnet-beta": {
+      "status": "not deployed",
+      "programId": null,
+      "raydiumCpmm": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
+      "raydiumAmmConfig": "D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2"
+    }
+  }
+}

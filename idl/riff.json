@@ -1,0 +1,2771 @@
+{
+  "address": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV",
+  "metadata": {
+    "name": "riff",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "accept_admin",
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "pending_admin",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "buy",
+      "discriminator": [
+        102,
+        6,
+        61,
+        18,
+        1,
+        218,
+        235,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "trader_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "max_sol_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_tokens_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "claim_artist",
+      "discriminator": [
+        18,
+        47,
+        7,
+        231,
+        18,
+        153,
+        154,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "artist",
+          "signer": true
+        },
+        {
+          "name": "verifier",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "coin.mint",
+                "account": "Coin"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "artist_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "collect_protocol_fees",
+      "discriminator": [
+        22,
+        67,
+        23,
+        98,
+        150,
+        178,
+        70,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "coin.mint",
+                "account": "Coin"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_coin",
+      "discriminator": [
+        208,
+        85,
+        34,
+        37,
+        235,
+        182,
+        111,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Fresh keypair. The coin PDA is mint authority only for the length of",
+            "this instruction; no freeze authority is ever set."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_token_account",
+          "docs": [
+            "Created only if the creator buys at launch; its address is enforced."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "CreateCoinArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "graduate",
+      "discriminator": [
+        45,
+        235,
+        225,
+        181,
+        17,
+        218,
+        64,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "Writable only for burning tokens someone planted in the graduation",
+            "account (burning lowers the mint's supply)."
+          ],
+          "writable": true,
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "graduation_authority",
+          "docs": [
+            "Signs for riff as the Raydium pool creator. Holds SOL only during",
+            "this instruction."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  100,
+                  117,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "graduation_token_account",
+          "docs": [
+            "emptied and closed here. Address enforced."
+          ],
+          "writable": true
+        },
+        {
+          "name": "graduation_wsol_account",
+          "docs": [
+            "and closed here. Address enforced."
+          ],
+          "writable": true
+        },
+        {
+          "name": "graduation_lp_account",
+          "docs": [
+            "its LP tokens are burned and it's closed here. Address enforced."
+          ],
+          "writable": true
+        },
+        {
+          "name": "pool_state",
+          "docs": [
+            "creation. Raydium creates and owns the account."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "raydium_program",
+          "address": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C"
+        },
+        {
+          "name": "amm_config"
+        },
+        {
+          "name": "raydium_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  110,
+                  100,
+                  95,
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  95,
+                  115,
+                  101,
+                  101,
+                  100
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                169,
+                42,
+                90,
+                139,
+                79,
+                41,
+                89,
+                82,
+                132,
+                37,
+                80,
+                170,
+                147,
+                253,
+                91,
+                149,
+                181,
+                172,
+                230,
+                168,
+                235,
+                146,
+                12,
+                147,
+                148,
+                46,
+                67,
+                105,
+                12,
+                32,
+                236,
+                115
+              ]
+            }
+          }
+        },
+        {
+          "name": "lp_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  108,
+                  112,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool_state"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                169,
+                42,
+                90,
+                139,
+                79,
+                41,
+                89,
+                82,
+                132,
+                37,
+                80,
+                170,
+                147,
+                253,
+                91,
+                149,
+                181,
+                172,
+                230,
+                168,
+                235,
+                146,
+                12,
+                147,
+                148,
+                46,
+                67,
+                105,
+                12,
+                32,
+                236,
+                115
+              ]
+            }
+          }
+        },
+        {
+          "name": "pool_token_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool_state"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                169,
+                42,
+                90,
+                139,
+                79,
+                41,
+                89,
+                82,
+                132,
+                37,
+                80,
+                170,
+                147,
+                253,
+                91,
+                149,
+                181,
+                172,
+                230,
+                168,
+                235,
+                146,
+                12,
+                147,
+                148,
+                46,
+                67,
+                105,
+                12,
+                32,
+                236,
+                115
+              ]
+            }
+          }
+        },
+        {
+          "name": "pool_wsol_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool_state"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  155,
+                  136,
+                  87,
+                  254,
+                  171,
+                  129,
+                  132,
+                  251,
+                  104,
+                  127,
+                  99,
+                  70,
+                  24,
+                  192,
+                  53,
+                  218,
+                  196,
+                  57,
+                  220,
+                  26,
+                  235,
+                  59,
+                  85,
+                  152,
+                  160,
+                  240,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                169,
+                42,
+                90,
+                139,
+                79,
+                41,
+                89,
+                82,
+                132,
+                37,
+                80,
+                170,
+                147,
+                253,
+                91,
+                149,
+                181,
+                172,
+                230,
+                168,
+                235,
+                146,
+                12,
+                147,
+                148,
+                46,
+                67,
+                105,
+                12,
+                32,
+                236,
+                115
+              ]
+            }
+          }
+        },
+        {
+          "name": "observation_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  98,
+                  115,
+                  101,
+                  114,
+                  118,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool_state"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                169,
+                42,
+                90,
+                139,
+                79,
+                41,
+                89,
+                82,
+                132,
+                37,
+                80,
+                170,
+                147,
+                253,
+                91,
+                149,
+                181,
+                172,
+                230,
+                168,
+                235,
+                146,
+                12,
+                147,
+                148,
+                46,
+                67,
+                105,
+                12,
+                32,
+                236,
+                115
+              ]
+            }
+          }
+        },
+        {
+          "name": "create_pool_fee_receiver",
+          "writable": true,
+          "address": "DNXgeM9EiiaAbaWvwjHj9fQQLAX5ZsfHyvmYUNRAdNC8"
+        },
+        {
+          "name": "wsol_mint",
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_config",
+      "discriminator": [
+        208,
+        127,
+        21,
+        1,
+        194,
+        190,
+        196,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "docs": [
+            "Must be the program's upgrade authority, so nobody can front-run",
+            "deployment and claim the config."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "program",
+          "address": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "ConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "prepare_graduation",
+      "discriminator": [
+        69,
+        188,
+        237,
+        109,
+        88,
+        218,
+        159,
+        115
+      ],
+      "accounts": [
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "graduation_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  114,
+                  97,
+                  100,
+                  117,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sell",
+      "discriminator": [
+        51,
+        230,
+        133,
+        164,
+        1,
+        127,
+        131,
+        173
+      ],
+      "accounts": [
+        {
+          "name": "trader",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "trader_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "token_amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_sol_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "sweep_charity_fees",
+      "discriminator": [
+        116,
+        200,
+        208,
+        102,
+        215,
+        44,
+        242,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "charity",
+          "writable": true
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "coin.mint",
+                "account": "Coin"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transfer_admin",
+      "discriminator": [
+        42,
+        242,
+        66,
+        106,
+        228,
+        10,
+        111,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_admin",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_config",
+      "discriminator": [
+        29,
+        158,
+        252,
+        191,
+        10,
+        83,
+        219,
+        99
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "withdraw_artist_fees",
+      "discriminator": [
+        204,
+        60,
+        30,
+        111,
+        252,
+        140,
+        194,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "artist",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "coin.mint",
+                "account": "Coin"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_creator_fees",
+      "discriminator": [
+        8,
+        30,
+        213,
+        18,
+        121,
+        105,
+        129,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "coin"
+          ]
+        },
+        {
+          "name": "coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  105,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "coin.mint",
+                "account": "Coin"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Coin",
+      "discriminator": [
+        215,
+        195,
+        53,
+        238,
+        217,
+        196,
+        213,
+        51
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AdminTransferProposed",
+      "discriminator": [
+        203,
+        168,
+        175,
+        51,
+        239,
+        104,
+        20,
+        85
+      ]
+    },
+    {
+      "name": "AdminTransferred",
+      "discriminator": [
+        255,
+        147,
+        182,
+        5,
+        199,
+        217,
+        38,
+        179
+      ]
+    },
+    {
+      "name": "ArtistClaimed",
+      "discriminator": [
+        49,
+        29,
+        178,
+        17,
+        116,
+        114,
+        250,
+        30
+      ]
+    },
+    {
+      "name": "ArtistFeesWithdrawn",
+      "discriminator": [
+        236,
+        247,
+        32,
+        66,
+        72,
+        22,
+        78,
+        251
+      ]
+    },
+    {
+      "name": "CharityFeesSwept",
+      "discriminator": [
+        187,
+        49,
+        44,
+        93,
+        115,
+        39,
+        75,
+        51
+      ]
+    },
+    {
+      "name": "CoinCreated",
+      "discriminator": [
+        155,
+        248,
+        204,
+        17,
+        205,
+        237,
+        158,
+        104
+      ]
+    },
+    {
+      "name": "ConfigInitialized",
+      "discriminator": [
+        181,
+        49,
+        200,
+        156,
+        19,
+        167,
+        178,
+        91
+      ]
+    },
+    {
+      "name": "ConfigUpdated",
+      "discriminator": [
+        40,
+        241,
+        230,
+        122,
+        11,
+        19,
+        198,
+        194
+      ]
+    },
+    {
+      "name": "CreatorFeesWithdrawn",
+      "discriminator": [
+        142,
+        52,
+        192,
+        191,
+        6,
+        90,
+        253,
+        62
+      ]
+    },
+    {
+      "name": "CurveCompleted",
+      "discriminator": [
+        1,
+        174,
+        164,
+        127,
+        219,
+        129,
+        243,
+        14
+      ]
+    },
+    {
+      "name": "Graduated",
+      "discriminator": [
+        51,
+        241,
+        66,
+        50,
+        140,
+        245,
+        156,
+        192
+      ]
+    },
+    {
+      "name": "GraduationPrepared",
+      "discriminator": [
+        12,
+        183,
+        149,
+        64,
+        194,
+        44,
+        234,
+        227
+      ]
+    },
+    {
+      "name": "ProtocolFeesCollected",
+      "discriminator": [
+        165,
+        34,
+        125,
+        155,
+        15,
+        86,
+        99,
+        191
+      ]
+    },
+    {
+      "name": "Trade",
+      "discriminator": [
+        24,
+        254,
+        218,
+        152,
+        253,
+        43,
+        18,
+        81
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NotUpgradeAuthority",
+      "msg": "Signer is not the program upgrade authority"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidClaimWindow",
+      "msg": "Claim window must be greater than zero"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTradeFee",
+      "msg": "Total trading fee must be at most 1000 bps"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidCreatorBuyCap",
+      "msg": "Creator buy cap must be at most 1000 bps of supply"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidCurveParams",
+      "msg": "Invalid bonding curve parameters"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidName",
+      "msg": "Token name must be 1-32 bytes"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidSymbol",
+      "msg": "Token symbol must be 1-10 bytes"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidUri",
+      "msg": "Metadata URI must be 1-200 bytes"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidArtistId",
+      "msg": "Artist ID must be 1-64 printable ASCII characters with no spaces"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidArtistName",
+      "msg": "Artist name must be 1-64 bytes"
+    },
+    {
+      "code": 6010,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6011,
+      "name": "AmountTooSmall",
+      "msg": "Amount is zero or too small to trade"
+    },
+    {
+      "code": 6012,
+      "name": "SlippageExceeded",
+      "msg": "Price moved beyond the slippage limit"
+    },
+    {
+      "code": 6013,
+      "name": "CurveComplete",
+      "msg": "Bonding curve is complete; trading is closed until graduation"
+    },
+    {
+      "code": 6014,
+      "name": "CreatorBuyTooLarge",
+      "msg": "Creator launch buy exceeds the cap"
+    },
+    {
+      "code": 6015,
+      "name": "TradingNotOpen",
+      "msg": "Trading opens the slot after launch"
+    },
+    {
+      "code": 6016,
+      "name": "NoFeesToWithdraw",
+      "msg": "No fees to withdraw"
+    },
+    {
+      "code": 6017,
+      "name": "TreasuryNotRentExempt",
+      "msg": "Collection would leave the treasury below the rent-exempt minimum"
+    },
+    {
+      "code": 6018,
+      "name": "CoinUnderfunded",
+      "msg": "Payout would leave the coin account unable to cover what it owes"
+    },
+    {
+      "code": 6019,
+      "name": "CharityNotRentExempt",
+      "msg": "Sweep would leave the charity wallet below the rent-exempt minimum"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidPayoutRecipient",
+      "msg": "A coin can't pay out to itself"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidAddress",
+      "msg": "Address must not be the default (all zeros) key"
+    },
+    {
+      "code": 6022,
+      "name": "NotVerifier",
+      "msg": "Claim must be co-signed by the configured verifier"
+    },
+    {
+      "code": 6023,
+      "name": "AlreadyClaimed",
+      "msg": "This coin's artist has already claimed it"
+    },
+    {
+      "code": 6024,
+      "name": "ArtistIdMismatch",
+      "msg": "Artist ID doesn't match the coin's artist"
+    },
+    {
+      "code": 6025,
+      "name": "NotArtist",
+      "msg": "Only the coin's claimed artist can do this"
+    },
+    {
+      "code": 6026,
+      "name": "NotAdmin",
+      "msg": "Only the config admin can do this"
+    },
+    {
+      "code": 6027,
+      "name": "NotPendingAdmin",
+      "msg": "Only the proposed admin can accept"
+    },
+    {
+      "code": 6028,
+      "name": "CurveNotComplete",
+      "msg": "The curve hasn't sold out yet"
+    },
+    {
+      "code": 6029,
+      "name": "AlreadyGraduated",
+      "msg": "This coin has already graduated"
+    },
+    {
+      "code": 6030,
+      "name": "ReserveMissing",
+      "msg": "The vault holds less than the graduation reserve"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidAmmConfig",
+      "msg": "Account isn't the configured Raydium fee tier"
+    },
+    {
+      "code": 6032,
+      "name": "GraduationNotPrepared",
+      "msg": "Graduation needs prepare_graduation first"
+    },
+    {
+      "code": 6033,
+      "name": "GraduationAlreadyPrepared",
+      "msg": "Graduation is already prepared"
+    }
+  ],
+  "types": [
+    {
+      "name": "AdminTransferProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdminTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous_admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArtistClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_id",
+            "type": "string"
+          },
+          {
+            "name": "late",
+            "docs": [
+              "Claimed after the claim window closed."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "forfeited_to_charity",
+            "docs": [
+              "Fees held for the artist that went to the charity instead because",
+              "the claim was late."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArtistFeesWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CharityFeesSwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "charity",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Coin",
+      "docs": [
+        "One launched coin. PDA at `[COIN_SEED, mint]`.",
+        "",
+        "The artist is recorded only as text until they claim the coin; until then",
+        "`artist` is `None` and nothing implies the artist is affiliated with it.",
+        "",
+        "Holds the curve's SOL and all uncollected fees as lamports, on top of its",
+        "own rent."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "docs": [
+              "Program-owned token account holding the full supply."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_id",
+            "type": "string"
+          },
+          {
+            "name": "artist_name",
+            "type": "string"
+          },
+          {
+            "name": "artist",
+            "docs": [
+              "Set when the artist claims the coin."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "created_slot",
+            "docs": [
+              "Slot the coin was created in. `buy` is closed for this slot, so the",
+              "creator's capped launch buy is the only purchase possible at launch."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claim_deadline",
+            "docs": [
+              "Last moment the artist may claim, fixed at creation from the config's",
+              "claim window so later config changes don't move it."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "virtual_sol_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "virtual_token_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "real_sol_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "real_token_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "artist_fees",
+            "docs": [
+              "Artist fees held for the artist, in lamports: accrued before the claim",
+              "window closed, or after the artist claimed."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "charity_fees",
+            "docs": [
+              "Artist-share fees owed to the charity and not yet swept, in lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_fees",
+            "docs": [
+              "Creator fees accrued and not yet withdrawn, in lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fees",
+            "docs": [
+              "Protocol fees accrued and not yet collected to the treasury, in lamports."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "complete",
+            "docs": [
+              "Every curve token has been sold; trading stops until graduation."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "pool",
+            "docs": [
+              "Raydium pool the coin graduated to. Set once, by `graduate`."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "graduation_sol",
+            "docs": [
+              "Curve SOL handed to the graduation authority by `prepare_graduation`",
+              "and not yet deposited in the pool (0 before and after graduation)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "artist_fees_total",
+            "docs": [
+              "Every artist share of every curve trade fee, in lamports, whether it",
+              "went to the artist or to charity. Never decreases."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "peak_virtual_sol",
+            "docs": [
+              "Highest virtual SOL reserves the curve has reached. The price only",
+              "rises with virtual SOL, so this marks the curve's all-time-high price."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "volume_hourly",
+            "docs": [
+              "Curve trade volume (SOL into or out of the curve, before fees) per",
+              "hour for the last 24 hours: `volume_hourly[h % 24]` holds unix hour",
+              "`h`, for `h` in `volume_hour - 23 ..= volume_hour`."
+            ],
+            "type": {
+              "array": [
+                "u64",
+                24
+              ]
+            }
+          },
+          {
+            "name": "volume_hour",
+            "docs": [
+              "Unix hour (seconds / 3600) of the latest trade."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CoinCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_id",
+            "type": "string"
+          },
+          {
+            "name": "artist_name",
+            "type": "string"
+          },
+          {
+            "name": "claim_deadline",
+            "type": "i64"
+          },
+          {
+            "name": "creator_buy_tokens",
+            "docs": [
+              "Tokens the creator bought at launch (0 if none)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_buy_sol",
+            "docs": [
+              "SOL the creator paid for them, fees included."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "docs": [
+        "Protocol-wide settings. Singleton PDA at `[CONFIG_SEED]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_admin",
+            "docs": [
+              "Proposed next admin; becomes admin only by signing `accept_admin`."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "treasury",
+            "docs": [
+              "Receives the protocol's share of trading fees, in batches, via the",
+              "permissionless `collect_protocol_fees`. Trades never touch it, so it",
+              "needn't sign or exist in advance (e.g. a Squads vault)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "charity",
+            "docs": [
+              "Receives artist fees nobody can claim: the artist's share for a coin",
+              "whose claim window closed unclaimed. riff donates from it."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "docs": [
+              "Co-signs every `claim_artist`, vouching that the claiming wallet",
+              "belongs to the coin's artist. Held by riff's verification service."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "raydium_amm_config",
+            "docs": [
+              "Raydium CPMM fee tier (`AmmConfig` account) graduated coins' pools use."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_fee_bps",
+            "docs": [
+              "Trading fee rates, each in basis points of a trade's SOL amount. Their",
+              "sum is the total fee charged."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "creator_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "claim_window_secs",
+            "docs": [
+              "How long after a coin's creation its artist may claim it, in seconds."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "initial_virtual_sol_reserves",
+            "docs": [
+              "Starting virtual reserves for every new coin's curve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "initial_virtual_token_reserves",
+            "docs": [
+              "Derived from the supply split so the graduation pool opens at the",
+              "curve's final price; see `curve::graduation_virtual_token_reserves`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "curve_token_supply",
+            "docs": [
+              "Tokens sellable on the curve; the rest of the supply stays in the",
+              "vault as the graduation reserve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_creator_buy_bps",
+            "docs": [
+              "Most the creator may buy at launch, in basis points of total supply."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "charity",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "raydium_amm_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "creator_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "claim_window_secs",
+            "type": "i64"
+          },
+          {
+            "name": "initial_virtual_sol_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "initial_virtual_token_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "curve_token_supply",
+            "type": "u64"
+          },
+          {
+            "name": "max_creator_buy_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "charity",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "raydium_amm_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_fee_bps",
+            "docs": [
+              "Fee rates in basis points of each trade's SOL amount."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "creator_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "protocol_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "claim_window_secs",
+            "type": "i64"
+          },
+          {
+            "name": "initial_virtual_sol_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "curve_token_supply",
+            "docs": [
+              "Tokens sold on the curve. The graduation reserve is the rest of the",
+              "supply, and the starting virtual token reserves are derived from both."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_creator_buy_bps",
+            "docs": [
+              "Creator launch-buy cap, in basis points of total supply."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "charity",
+            "type": "pubkey"
+          },
+          {
+            "name": "verifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "raydium_amm_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "claim_window_secs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreateCoinArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "artist_id",
+            "docs": [
+              "External artist identifier (e.g. a streaming-platform artist ID)."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "artist_name",
+            "type": "string"
+          },
+          {
+            "name": "creator_buy_sol",
+            "docs": [
+              "Most SOL (fee included) the creator spends buying at launch, from the",
+              "same curve as everyone else. 0 for no buy. The tokens bought may not",
+              "exceed the config's cap."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "creator_buy_min_tokens",
+            "docs": [
+              "Fewest tokens the launch buy may return. The curve is fresh, but the",
+              "config's fees and curve settings could change between signing and",
+              "landing."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CreatorFeesWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CurveCompleted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "real_sol_reserves",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Graduated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_amount",
+            "docs": [
+              "SOL deposited into the pool: exactly what the curve raised."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_amount",
+            "docs": [
+              "Tokens deposited: exactly the graduation reserve."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "lp_burned",
+            "docs": [
+              "Every LP token minted to riff, burned so the liquidity is locked."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "cost_reimbursed",
+            "docs": [
+              "Pool-creation cost reimbursed to the caller from protocol fees."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GraduationPrepared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "sol_amount",
+            "docs": [
+              "Curve SOL moved to the graduation authority for the pool."
+            ],
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolFeesCollected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Trade",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "coin",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "trader",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_buy",
+            "type": "bool"
+          },
+          {
+            "name": "sol_amount",
+            "docs": [
+              "SOL into (buy) or out of (sell) the curve's reserves, before fees."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "artist_fee",
+            "type": "u64"
+          },
+          {
+            "name": "creator_fee",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_fee",
+            "type": "u64"
+          },
+          {
+            "name": "virtual_sol_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "virtual_token_reserves",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateConfigParams",
+      "docs": [
+        "Settings to change; `None` leaves one unchanged. Fees and curve settings",
+        "can't be changed here, and nothing here can touch funds held by coins."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "charity",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "verifier",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "raydium_amm_config",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "claim_window_secs",
+            "docs": [
+              "Claim window for coins launched from now on. Existing coins keep the",
+              "deadline they got at launch."
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "BPS_DENOMINATOR",
+      "docs": [
+        "Basis-point denominator (100%)."
+      ],
+      "type": "u16",
+      "value": "10000"
+    },
+    {
+      "name": "COIN_DECIMALS",
+      "type": "u8",
+      "value": "6"
+    },
+    {
+      "name": "COIN_SEED",
+      "type": "bytes",
+      "value": "[99, 111, 105, 110]"
+    },
+    {
+      "name": "COIN_TOTAL_SUPPLY",
+      "docs": [
+        "1,000,000,000 whole tokens, in base units. Minted once at creation; never more."
+      ],
+      "type": "u64",
+      "value": "1000000000000000"
+    },
+    {
+      "name": "CONFIG_SEED",
+      "type": "bytes",
+      "value": "[99, 111, 110, 102, 105, 103]"
+    },
+    {
+      "name": "GRADUATION_SEED",
+      "type": "bytes",
+      "value": "[103, 114, 97, 100, 117, 97, 116, 105, 111, 110]"
+    },
+    {
+      "name": "MAX_CREATOR_BUY_BPS",
+      "docs": [
+        "Highest creator launch-buy cap the config will accept (10% of supply)."
+      ],
+      "type": "u16",
+      "value": "1000"
+    },
+    {
+      "name": "MAX_TRADE_FEE_BPS",
+      "docs": [
+        "Highest total trading fee the config will accept (10%)."
+      ],
+      "type": "u16",
+      "value": "1000"
+    },
+    {
+      "name": "POOL_SEED",
+      "docs": [
+        "riff PDA used as the graduated coin's Raydium pool address. Only riff can",
+        "sign for it, so nobody can create the graduation pool first."
+      ],
+      "type": "bytes",
+      "value": "[112, 111, 111, 108]"
+    },
+    {
+      "name": "VAULT_SEED",
+      "type": "bytes",
+      "value": "[118, 97, 117, 108, 116]"
+    }
+  ]
+}
