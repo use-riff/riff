@@ -82,6 +82,7 @@ pub fn handle_initialize_config(
 
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
+        pending_admin: None,
         treasury: params.treasury,
         charity: params.charity,
         verifier: params.verifier,

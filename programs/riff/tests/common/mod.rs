@@ -659,3 +659,30 @@ pub fn mint_supply(svm: &LiteSVM, mint: &Pubkey) -> u64 {
     let data = svm.get_account(mint).expect("mint missing").data;
     u64::from_le_bytes(data[36..44].try_into().unwrap())
 }
+
+pub fn transfer_admin_ix(admin: &Pubkey, new_admin: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::TransferAdmin {
+            new_admin: *new_admin,
+        }
+        .data(),
+        riff::accounts::TransferAdmin {
+            admin: *admin,
+            config: config_address(),
+        }
+        .to_account_metas(None),
+    )
+}
+
+pub fn accept_admin_ix(pending_admin: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::AcceptAdmin {}.data(),
+        riff::accounts::AcceptAdmin {
+            pending_admin: *pending_admin,
+            config: config_address(),
+        }
+        .to_account_metas(None),
+    )
+}
