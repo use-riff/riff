@@ -80,6 +80,7 @@ pub fn setup() -> Env {
     let mut svm = LiteSVM::new();
     let bytes = include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/riff.so"));
     svm.add_program(riff::ID, bytes).unwrap();
+    load_live_token_programs(&mut svm);
     load_raydium(&mut svm);
 
     // LiteSVM deploys with no upgrade authority. Rewrite the ProgramData
@@ -448,6 +449,19 @@ pub fn advance_time(svm: &mut LiteSVM, secs: i64) {
     svm.set_sysvar(&clock);
 }
 
+/// Replaces LiteSVM's bundled token programs with the builds mainnet and
+/// devnet actually run (tests/fixtures/). The bundled SPL Token is older and
+/// more lenient: it accepted a call the live program rejects.
+fn load_live_token_programs(svm: &mut LiteSVM) {
+    svm.add_program(TOKEN_PROGRAM_ID, include_bytes!("../fixtures/spl_token.so"))
+        .unwrap();
+    svm.add_program(
+        TOKEN_2022_ID,
+        include_bytes!("../fixtures/spl_token_2022.so"),
+    )
+    .unwrap();
+}
+
 /// Loads Raydium CPMM and the mainnet accounts it needs, from snapshots in
 /// tests/fixtures/ (taken with `solana program dump` / `solana account`).
 fn load_raydium(svm: &mut LiteSVM) {
@@ -578,14 +592,29 @@ pub fn graduate_ix(payer: &Pubkey, mint: &Pubkey) -> Instruction {
     )
 }
 
-/// Graduates `mint` with a generous compute budget (Raydium's pool creation
-/// is heavy); `payer` pays and signs.
+pub fn prepare_graduation_ix(mint: &Pubkey) -> Instruction {
+    Instruction::new_with_bytes(
+        riff::ID,
+        &riff::instruction::PrepareGraduation {}.data(),
+        riff::accounts::PrepareGraduation {
+            coin: coin_address(mint),
+            mint: *mint,
+            graduation_authority: graduation_accounts(mint).authority,
+        }
+        .to_account_metas(None),
+    )
+}
+
+/// Graduates `mint` the way clients do: prepare + graduate in one
+/// transaction, with a generous compute budget (Raydium's pool creation is
+/// heavy); `payer` pays and signs.
 #[allow(clippy::result_large_err)]
 pub fn graduate(svm: &mut LiteSVM, payer: &Keypair, mint: &Pubkey) -> TransactionResult {
     send_many(
         svm,
         &[
             compute_budget_ix(600_000),
+            prepare_graduation_ix(mint),
             graduate_ix(&payer.pubkey(), mint),
         ],
         &[payer],
