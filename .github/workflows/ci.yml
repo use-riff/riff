@@ -115,6 +115,9 @@ jobs:
       - name: Client tests (curve math matches the program)
         run: pnpm -C clients/ts test
 
+      - name: App tests (upload validation)
+        run: pnpm -C app test
+
       - name: Build the app
         run: pnpm -C app build
 
