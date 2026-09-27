@@ -11,6 +11,48 @@ Raydium pool.
 This repository holds the on-chain program only. The app and other
 off-chain services live elsewhere.
 
+## Try it
+
+**Live demo: https://riff-gold-nu.vercel.app** (devnet, free test SOL).
+
+1. Set your wallet (Phantom, Solflare, ...) to devnet and get test SOL at
+   https://faucet.solana.com.
+2. **Explore** coins. Each coin's page shows its market cap, liquidity, 24h
+   volume, all-time high, what it has raised for its artist, and whether the
+   artist stands behind it ("unclaimed · not endorsed by the artist" until
+   they claim it).
+3. **Trade** on a coin's curve: a quote before you sign and a slippage limit.
+4. **Launch** a coin for an artist, with an image and an optional capped
+   launch buy.
+5. **Claim** a coin as its artist. A demo verifier stands in for riff's
+   real artist verification on devnet.
+6. **Graduate** a sold-out coin into Raydium, then trade it there.
+
+On devnet the curve is 100 times cheaper than on mainnet, so a coin sells out
+with about 0.85 SOL.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  W[Wallet] --> A[riff app]
+  A -- claim request --> V[riff verifier]
+  V -- co-signed claim_artist --> A
+  A -- transactions --> P[riff program]
+  P -- Token-2022 mint, vault --> T[(Token-2022)]
+  P -- graduate: create pool, burn LP --> R[Raydium CPMM]
+  P -- fees --> F[artist, creator, treasury, charity]
+```
+
+- **riff program** (this repository): coins, the bonding curve, fees, the
+  artist claim and graduation. Everything that holds or moves funds.
+- **App** (private repository): a web app that reads the program's accounts
+  directly and builds transactions from the published IDL. No indexer.
+- **Verifier** (private): the only off-chain signer the program trusts. It
+  co-signs `claim_artist` once an artist has proved who they are. It can only
+  link an unclaimed coin to a wallet; it can't touch curve SOL, other fees or
+  claimed coins.
+
 ## Deployments
 
 | Cluster | Program | Config | Status |
@@ -108,10 +150,33 @@ Every state change emits an event (`CoinCreated`, `Trade`, `ArtistClaimed`,
   deployed on mainnet (`programs/riff/tests/fixtures/`), not mocks.
 - CI builds, tests, runs clippy, `cargo audit` and gitleaks on every change,
   and checks that `idl/` and `vectors/` match the program.
+- An internal security review found three issues that are fixed, each with
+  regression tests: graduation into a DEX (H-01), the artist claim and
+  charity flow (M-01), and launch-slot bundling around the creator-buy cap
+  (M-02).
 - Not yet audited externally. See [`docs/AUDIT_PACKAGE.md`](docs/AUDIT_PACKAGE.md)
   for scope, invariants and known limitations.
 
 Found a vulnerability? Please report it privately; see [SECURITY.md](SECURITY.md).
+
+## Status and roadmap
+
+**Now:** live on devnet, with the full lifecycle (launch, trade, claim,
+charity, graduation, trading on Raydium) working end to end in the app.
+
+**Before mainnet:**
+
+- an external security audit;
+- admin and upgrade authority moved to a Squads multisig with a time lock;
+- real artist verification (Spotify for Artists plus manual review) behind
+  the verifier;
+- an emergency pause, and a way to undo a fraudulent claim;
+- keeping the artist's cut after graduation;
+- verifiable builds, and the move to SBPF v3 before Solana stops accepting v0
+  deployments.
+
+riff has not launched a token. Mainnet is announced only by
+[@useRiffPad](https://x.com/useRiffPad).
 
 ## Build and test
 
