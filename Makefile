@@ -2,10 +2,17 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet test fmt lint clean deploy-devnet devnet-config
+.PHONY: build build-devnet test fmt lint clean deploy-devnet devnet-config idl
 
 build:
 	anchor build --arch $(ARCH)
+
+# Copy the program's interface (IDL + TypeScript types) into the TypeScript
+# client, which is committed so the app builds without Rust. CI fails if the
+# copy is stale.
+idl: build
+	cp target/idl/riff.json clients/ts/src/idl/riff.json
+	cp target/types/riff.ts clients/ts/src/idl/riff.ts
 
 # Devnet build (Raydium's devnet addresses), saved as riff-devnet.so so it
 # can't be mistaken for the mainnet riff.so. Then rebuilds the mainnet

@@ -80,8 +80,43 @@ jobs:
       - name: Test devnet addresses
         run: cargo test -p riff --lib --features devnet
 
+      - name: Committed IDL matches the program
+        run: make idl && git diff --exit-code clients/ts/src/idl
+
+      - name: Curve test vectors match the program
+        run: |
+          cargo test -p riff --test curve_vectors -- --ignored
+          git diff --exit-code clients/ts/test/curve-vectors.json
+
       - name: Clippy
         run: make lint
+
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dependencies (pnpm version from package.json)
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm -r typecheck
+
+      - name: Client tests (curve math matches the program)
+        run: pnpm -C clients/ts test
+
+      - name: Audit JavaScript dependencies (fails on high or critical)
+        run: pnpm audit --audit-level high
 
   audit:
     name: cargo-audit
