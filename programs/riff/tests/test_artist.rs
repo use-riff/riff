@@ -422,6 +422,7 @@ fn admin_can_move_treasury_and_charity() {
             charity: Some(charity),
             verifier: None,
             raydium_amm_config: None,
+            claim_window_secs: None,
         },
     );
     send(&mut l.env.svm, ix, &[&admin]).unwrap();
@@ -479,4 +480,61 @@ fn config_rejects_the_all_zero_address() {
     let ix = initialize_config_ix(&env.admin.pubkey(), params);
     let admin = env.admin.insecure_clone();
     assert_riff_error(send(&mut env.svm, ix, &[&admin]), ErrorCode::InvalidAddress);
+}
+
+#[test]
+fn admin_can_change_the_claim_window_for_future_coins() {
+    let mut l = launch();
+    let old_deadline = coin(&l).claim_deadline;
+    assert_eq!(old_deadline, START_TIME + CLAIM_WINDOW_SECS);
+
+    let admin = l.env.admin.insecure_clone();
+    let week = 7 * 24 * 60 * 60;
+    let ix = update_config_ix(
+        &admin.pubkey(),
+        riff::UpdateConfigParams {
+            claim_window_secs: Some(week),
+            ..Default::default()
+        },
+    );
+    let meta = send(&mut l.env.svm, ix, &[&admin]).unwrap();
+    assert_eq!(
+        events::<riff::events::ConfigUpdated>(&meta.logs)[0].claim_window_secs,
+        week
+    );
+    let config: riff::Config = fetch(&l.env.svm, &config_address());
+    assert_eq!(config.claim_window_secs, week);
+
+    // A coin launched now gets the new window...
+    advance_time(&mut l.env.svm, 100);
+    let creator = funded_keypair(&mut l.env.svm);
+    let mint = Keypair::new();
+    let ix = create_coin_ix(&creator.pubkey(), &mint.pubkey(), coin_args());
+    send(&mut l.env.svm, ix, &[&creator, &mint]).unwrap();
+    let new_coin: riff::Coin = fetch(&l.env.svm, &coin_address(&mint.pubkey()));
+    assert_eq!(new_coin.claim_deadline, START_TIME + 100 + week);
+
+    // ...and the existing coin keeps the deadline it launched with.
+    assert_eq!(coin(&l).claim_deadline, old_deadline);
+}
+
+#[test]
+fn claim_window_must_stay_positive() {
+    let mut l = launch();
+    let admin = l.env.admin.insecure_clone();
+    for bad in [0, -1] {
+        let ix = update_config_ix(
+            &admin.pubkey(),
+            riff::UpdateConfigParams {
+                claim_window_secs: Some(bad),
+                ..Default::default()
+            },
+        );
+        assert_riff_error(
+            send(&mut l.env.svm, ix, &[&admin]),
+            ErrorCode::InvalidClaimWindow,
+        );
+    }
+    let config: riff::Config = fetch(&l.env.svm, &config_address());
+    assert_eq!(config.claim_window_secs, CLAIM_WINDOW_SECS);
 }

@@ -75,6 +75,7 @@ pub struct ConfigUpdated {
     pub charity: Pubkey,
     pub verifier: Pubkey,
     pub raydium_amm_config: Pubkey,
+    pub claim_window_secs: i64,
 }
 
 #[event]
