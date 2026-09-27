@@ -100,6 +100,18 @@ pub struct Coin {
     /// Curve SOL handed to the graduation authority by `prepare_graduation`
     /// and not yet deposited in the pool (0 before and after graduation).
     pub graduation_sol: u64,
+    /// Every artist share of every curve trade fee, in lamports, whether it
+    /// went to the artist or to charity. Never decreases.
+    pub artist_fees_total: u64,
+    /// Highest virtual SOL reserves the curve has reached. The price only
+    /// rises with virtual SOL, so this marks the curve's all-time-high price.
+    pub peak_virtual_sol: u64,
+    /// Curve trade volume (SOL into or out of the curve, before fees) per
+    /// hour for the last 24 hours: `volume_hourly[h % 24]` holds unix hour
+    /// `h`, for `h` in `volume_hour - 23 ..= volume_hour`.
+    pub volume_hourly: [u64; VOLUME_HOURS],
+    /// Unix hour (seconds / 3600) of the latest trade.
+    pub volume_hour: i64,
     pub bump: u8,
     pub vault_bump: u8,
 }
@@ -142,10 +154,36 @@ impl Coin {
         Some(forfeited)
     }
 
+    /// Adds a trade to the running totals: lifetime artist share, peak price
+    /// and hourly volume. `sol` is the SOL into or out of the curve.
+    pub fn record_trade(&mut self, sol: u64, artist_fee: u64, now: i64) -> Option<()> {
+        self.artist_fees_total = self.artist_fees_total.checked_add(artist_fee)?;
+        self.peak_virtual_sol = self.peak_virtual_sol.max(self.virtual_sol_reserves);
+
+        let hour = now.div_euclid(3600);
+        if hour > self.volume_hour {
+            // Clear the buckets of the hours that passed without a trade.
+            let passed = (hour - self.volume_hour).min(VOLUME_HOURS as i64);
+            for h in 1..=passed {
+                self.volume_hourly[bucket(self.volume_hour + h)] = 0;
+            }
+            self.volume_hour = hour;
+        }
+        // The clock never runs backwards by a whole hour; if it ever did, the
+        // trade still counts, in the latest bucket.
+        let b = bucket(self.volume_hour);
+        self.volume_hourly[b] = self.volume_hourly[b].checked_add(sol)?;
+        Some(())
+    }
+
     pub fn set_reserves(&mut self, r: Reserves) {
         self.virtual_sol_reserves = r.virtual_sol;
         self.virtual_token_reserves = r.virtual_token;
         self.real_token_reserves = r.real_token;
         self.real_sol_reserves = r.real_sol;
     }
+}
+
+fn bucket(hour: i64) -> usize {
+    hour.rem_euclid(VOLUME_HOURS as i64) as usize
 }
