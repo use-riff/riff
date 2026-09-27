@@ -469,7 +469,15 @@ fn graduation_only_uses_the_configured_fee_tier() {
                 m.pubkey = wrong;
             }
         }
-        let res = send_many(&mut l.env.svm, &[compute_budget_ix(600_000), ix], &[&k]);
+        let res = send_many(
+            &mut l.env.svm,
+            &[
+                compute_budget_ix(600_000),
+                prepare_graduation_ix(&l.mint),
+                ix,
+            ],
+            &[&k],
+        );
         assert_riff_error(res, ErrorCode::InvalidAmmConfig);
     }
     assert!(coin(&l).pool.is_none());
@@ -491,4 +499,105 @@ fn trading_on_the_curve_stays_closed_after_graduation() {
         send(&mut l.env.svm, ix, &[&holder]),
         ErrorCode::CurveComplete,
     );
+}
+
+// ------------------------------------------------------------ two-step flow
+
+fn graduate_after_prepare(l: &mut Launch, k: &Keypair) {
+    let ix = graduate_ix(&k.pubkey(), &l.mint);
+    send_many(&mut l.env.svm, &[compute_budget_ix(600_000), ix], &[k]).unwrap();
+}
+
+#[test]
+fn prepare_moves_exactly_the_curve_sol_to_the_graduation_authority() {
+    let mut l = sold_out();
+    let raised = coin(&l).real_sol_reserves;
+    let g = graduation_accounts(&l.mint);
+    let k = keeper(&mut l);
+    let meta = send(&mut l.env.svm, prepare_graduation_ix(&l.mint), &[&k]).unwrap();
+
+    let c = coin(&l);
+    assert_eq!(c.real_sol_reserves, 0);
+    assert_eq!(c.graduation_sol, raised);
+    assert_eq!(lamports(&l.env.svm, &g.authority), raised);
+    assert_eq!(
+        events::<riff::events::GraduationPrepared>(&meta.logs)[0].sol_amount,
+        raised
+    );
+    // The coin still backs every fee balance, so payouts keep working.
+    let key = coin_address(&l.mint);
+    let len = l.env.svm.get_account(&key).unwrap().data.len();
+    assert_eq!(
+        lamports(&l.env.svm, &key),
+        l.env.svm.minimum_balance_for_rent_exemption(len)
+            + c.artist_fees
+            + c.charity_fees
+            + c.creator_fees
+            + c.protocol_fees
+    );
+
+    // Graduation can finish in a later transaction.
+    graduate_after_prepare(&mut l, &k);
+    assert_eq!(raw_token_balance(&l.env.svm, &g.pool_wsol_vault), raised);
+    assert_eq!(coin(&l).graduation_sol, 0);
+    assert_eq!(lamports(&l.env.svm, &g.authority), 0);
+}
+
+#[test]
+fn graduate_requires_prepare() {
+    let mut l = sold_out();
+    let k = keeper(&mut l);
+    let ix = graduate_ix(&k.pubkey(), &l.mint);
+    assert_riff_error(
+        send_many(&mut l.env.svm, &[compute_budget_ix(600_000), ix], &[&k]),
+        ErrorCode::GraduationNotPrepared,
+    );
+}
+
+#[test]
+fn prepare_only_once_and_only_when_sold_out() {
+    let mut env = setup();
+    let mint = setup_coin(&mut env);
+    let payer = env.admin.insecure_clone();
+    let alice = trader(&mut env.svm, &mint, 20 * SOL);
+    send(
+        &mut env.svm,
+        buy_ix(&alice.pubkey(), &mint, 5 * SOL, 0),
+        &[&payer, &alice],
+    )
+    .unwrap();
+    assert_riff_error(
+        send(&mut env.svm, prepare_graduation_ix(&mint), &[&payer]),
+        ErrorCode::CurveNotComplete,
+    );
+
+    let mut l = sold_out();
+    let k = keeper(&mut l);
+    send(&mut l.env.svm, prepare_graduation_ix(&l.mint), &[&k]).unwrap();
+    assert_riff_error(
+        send(&mut l.env.svm, prepare_graduation_ix(&l.mint), &[&k]),
+        ErrorCode::GraduationAlreadyPrepared,
+    );
+    graduate_after_prepare(&mut l, &k);
+    assert_riff_error(
+        send(&mut l.env.svm, prepare_graduation_ix(&l.mint), &[&k]),
+        ErrorCode::AlreadyGraduated,
+    );
+}
+
+#[test]
+fn sol_sent_to_the_authority_between_steps_goes_to_the_caller_not_the_pool() {
+    let mut l = sold_out();
+    let raised = coin(&l).real_sol_reserves;
+    let g = graduation_accounts(&l.mint);
+    let k = keeper(&mut l);
+    send(&mut l.env.svm, prepare_graduation_ix(&l.mint), &[&k]).unwrap();
+    l.env.svm.airdrop(&g.authority, 2 * SOL).unwrap();
+    let before = lamports(&l.env.svm, &k.pubkey());
+
+    graduate_after_prepare(&mut l, &k);
+    assert_eq!(raw_token_balance(&l.env.svm, &g.pool_wsol_vault), raised);
+    assert_eq!(lamports(&l.env.svm, &g.authority), 0);
+    // The stray 2 SOL came back to the caller along with the unspent budget.
+    assert!(lamports(&l.env.svm, &k.pubkey()) > before + SOL);
 }

@@ -130,3 +130,11 @@ pub struct AdminTransferred {
     pub previous_admin: Pubkey,
     pub admin: Pubkey,
 }
+
+#[event]
+pub struct GraduationPrepared {
+    pub coin: Pubkey,
+    pub mint: Pubkey,
+    /// Curve SOL moved to the graduation authority for the pool.
+    pub sol_amount: u64,
+}

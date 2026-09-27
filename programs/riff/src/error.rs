@@ -66,4 +66,8 @@ pub enum ErrorCode {
     ReserveMissing,
     #[msg("Account isn't the configured Raydium fee tier")]
     InvalidAmmConfig,
+    #[msg("Graduation needs prepare_graduation first")]
+    GraduationNotPrepared,
+    #[msg("Graduation is already prepared")]
+    GraduationAlreadyPrepared,
 }

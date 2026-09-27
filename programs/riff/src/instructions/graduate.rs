@@ -24,8 +24,9 @@ use crate::{
     state::{Coin, Config},
 };
 
-/// Moves a sold-out coin's liquidity into a Raydium CPMM pool and burns the
-/// LP tokens, so the liquidity is locked forever.
+/// Step 2 of 2 of graduation, sent right after `prepare_graduation` in the
+/// same transaction. Moves a sold-out coin's liquidity into a Raydium CPMM
+/// pool and burns the LP tokens, so the liquidity is locked forever.
 ///
 /// Permissionless. The caller fronts Raydium's pool-creation fee plus a rent
 /// allowance; the unspent part is refunded, and the actual cost is
@@ -147,8 +148,10 @@ pub fn handle_graduate(ctx: Context<Graduate>) -> Result<()> {
     let a = &mut *ctx.accounts;
     require!(a.coin.complete, ErrorCode::CurveNotComplete);
     require!(a.coin.pool.is_none(), ErrorCode::AlreadyGraduated);
-
-    let sol_amount = a.coin.real_sol_reserves;
+    // prepare_graduation (earlier in the same transaction) moved the curve's
+    // SOL to the graduation authority and recorded the exact amount.
+    let sol_amount = a.coin.graduation_sol;
+    require!(sol_amount > 0, ErrorCode::GraduationNotPrepared);
     let token_amount = COIN_TOTAL_SUPPLY
         .checked_sub(a.config.curve_token_supply)
         .ok_or(ErrorCode::MathOverflow)?;
@@ -167,7 +170,12 @@ pub fn handle_graduate(ctx: Context<Graduate>) -> Result<()> {
     let budget = raydium_create_pool_fee(&a.amm_config)?
         .checked_add(GRADUATION_RENT_ALLOWANCE)
         .ok_or(ErrorCode::MathOverflow)?;
-    let grad_start = grad_info.lamports();
+    // What the authority held besides the curve's SOL (normally nothing;
+    // anything someone sent it is refunded to the caller with the rest).
+    let grad_start = grad_info
+        .lamports()
+        .checked_sub(sol_amount)
+        .ok_or(ErrorCode::MathOverflow)?;
     transfer(
         CpiContext::new(
             a.system_program.key(),
@@ -207,32 +215,23 @@ pub fn handle_graduate(ctx: Context<Graduate>) -> Result<()> {
     }
 
     // 3. Exactly the curve's SOL, wrapped, and exactly the reserve.
-    a.coin.real_sol_reserves = 0;
-    pay_from_coin(
-        &a.coin,
-        &a.graduation_wsol_account.to_account_info(),
+    transfer(
+        CpiContext::new_with_signer(
+            a.system_program.key(),
+            Transfer {
+                from: grad_info.clone(),
+                to: a.graduation_wsol_account.to_account_info(),
+            },
+            &[grad_seeds],
+        ),
         sol_amount,
     )?;
-    // SyncNative (instruction 17) credits the SOL as wrapped tokens. The coin
-    // account rides along as an extra account: after moving lamports by hand,
-    // the runtime only accepts a CPI that includes both accounts that changed.
-    // The token program ignores the extra account.
-    invoke_signed(
-        &Instruction {
-            program_id: token::ID,
-            accounts: vec![
-                AccountMeta::new(a.graduation_wsol_account.key(), false),
-                AccountMeta::new(a.coin.key(), false),
-            ],
-            data: vec![17],
+    token::sync_native(CpiContext::new(
+        a.token_program.key(),
+        token::SyncNative {
+            account: a.graduation_wsol_account.to_account_info(),
         },
-        &[
-            a.graduation_wsol_account.to_account_info(),
-            a.coin.to_account_info(),
-            a.token_program.to_account_info(),
-        ],
-        &[],
-    )?;
+    ))?;
     release_tokens(
         &a.token_2022_program,
         &a.vault,
@@ -403,6 +402,7 @@ pub fn handle_graduate(ctx: Context<Graduate>) -> Result<()> {
         pay_from_coin(&a.coin, &a.payer.to_account_info(), cost_reimbursed)?;
     }
 
+    a.coin.graduation_sol = 0;
     a.coin.pool = Some(a.pool_state.key());
     emit!(Graduated {
         coin: a.coin.key(),
