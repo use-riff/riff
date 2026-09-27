@@ -115,6 +115,9 @@ jobs:
       - name: Client tests (curve math matches the program)
         run: pnpm -C clients/ts test
 
+      - name: Build the app
+        run: pnpm -C app build
+
       - name: Audit JavaScript dependencies (fails on high or critical)
         run: pnpm audit --audit-level high
 
