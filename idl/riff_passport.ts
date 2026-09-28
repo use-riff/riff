@@ -687,84 +687,6 @@ export type RiffPassport = {
       ]
     },
     {
-      "name": "proveSpotifyForArtists",
-      "discriminator": [
-        185,
-        201,
-        153,
-        124,
-        39,
-        46,
-        209,
-        99
-      ],
-      "accounts": [
-        {
-          "name": "wallet",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "buffer"
-          ]
-        },
-        {
-          "name": "config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "buffer",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  102,
-                  102,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "wallet"
-              }
-            ]
-          }
-        },
-        {
-          "name": "proofRecord",
-          "writable": true
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "artistId",
-          "type": "string"
-        }
-      ]
-    },
-    {
       "name": "recordProof",
       "discriminator": [
         144,
@@ -1413,63 +1335,6 @@ export type RiffPassport = {
           }
         }
       ]
-    },
-    {
-      "name": "writeBuffer",
-      "discriminator": [
-        164,
-        194,
-        69,
-        154,
-        75,
-        169,
-        228,
-        85
-      ],
-      "accounts": [
-        {
-          "name": "wallet",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "buffer",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  98,
-                  117,
-                  102,
-                  102,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "wallet"
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "offset",
-          "type": "u32"
-        },
-        {
-          "name": "bytes",
-          "type": "bytes"
-        }
-      ]
     }
   ],
   "accounts": [
@@ -1510,19 +1375,6 @@ export type RiffPassport = {
         189,
         165,
         250
-      ]
-    },
-    {
-      "name": "proofBuffer",
-      "discriminator": [
-        71,
-        133,
-        225,
-        94,
-        9,
-        130,
-        40,
-        161
       ]
     },
     {
@@ -1738,136 +1590,96 @@ export type RiffPassport = {
     },
     {
       "code": 6005,
-      "name": "onChainOnly",
-      "msg": "This kind of proof can only be verified on-chain"
-    },
-    {
-      "code": 6006,
       "name": "proofMismatch",
       "msg": "A proof doesn't belong to this artist and wallet"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "proofExpired",
       "msg": "A proof is too old; prove it again"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "notEnoughProofs",
       "msg": "Needs at least 2 proofs from different sources, including a strong one"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "tooManyProofs",
       "msg": "Too many proofs"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "revoked",
       "msg": "The passport has been revoked"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "notPassportWallet",
       "msg": "Signer is not the passport's wallet"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "passkeyMissing",
       "msg": "No matching passkey signature in this transaction"
     },
     {
-      "code": 6013,
+      "code": 6012,
       "name": "passkeyWrongChallenge",
       "msg": "The passkey signature is for a different action"
     },
     {
-      "code": 6014,
+      "code": 6013,
       "name": "passkeyWrongSite",
       "msg": "The passkey signature is for a different site"
     },
     {
-      "code": 6015,
+      "code": 6014,
       "name": "passkeyNotVerified",
       "msg": "The passkey wasn't used with the user present and verified"
     },
     {
-      "code": 6016,
+      "code": 6015,
       "name": "passkeyMalformed",
       "msg": "Malformed passkey data"
     },
     {
-      "code": 6017,
+      "code": 6016,
       "name": "recoveryPending",
       "msg": "A recovery is already pending"
     },
     {
-      "code": 6018,
+      "code": 6017,
       "name": "noRecovery",
       "msg": "No recovery is pending"
     },
     {
-      "code": 6019,
+      "code": 6018,
       "name": "recoveryLocked",
       "msg": "The recovery time-lock hasn't passed yet"
     },
     {
-      "code": 6020,
+      "code": 6019,
       "name": "notAGuardian",
       "msg": "This proof can't veto the recovery"
     },
     {
-      "code": 6021,
+      "code": 6020,
       "name": "passkeyRequired",
       "msg": "Withdrawal needs the passkey"
     },
     {
-      "code": 6022,
+      "code": 6021,
       "name": "insufficientVault",
       "msg": "The vault doesn't hold that much"
     },
     {
-      "code": 6023,
+      "code": 6022,
       "name": "zeroAmount",
       "msg": "Amount must be greater than zero"
     },
     {
-      "code": 6024,
-      "name": "bufferOverflow",
-      "msg": "The proof buffer is too small or out of range"
-    },
-    {
-      "code": 6025,
-      "name": "reclaimMalformed",
-      "msg": "Malformed Reclaim proof"
-    },
-    {
-      "code": 6026,
-      "name": "reclaimIdentifierMismatch",
-      "msg": "The Reclaim proof's claim doesn't match its identifier"
-    },
-    {
-      "code": 6027,
-      "name": "reclaimUntrustedAttestor",
-      "msg": "The Reclaim proof isn't signed by a trusted attestor"
-    },
-    {
-      "code": 6028,
-      "name": "reclaimWrongProvider",
-      "msg": "The Reclaim proof is from a different provider"
-    },
-    {
-      "code": 6029,
-      "name": "reclaimWrongWallet",
-      "msg": "The Reclaim proof was made for a different wallet"
-    },
-    {
-      "code": 6030,
-      "name": "reclaimWrongArtist",
-      "msg": "The Reclaim proof is for a different artist"
-    },
-    {
-      "code": 6031,
+      "code": 6023,
       "name": "mathOverflow",
       "msg": "Math overflow"
     }
@@ -2085,37 +1897,11 @@ export type RiffPassport = {
           {
             "name": "verifier",
             "docs": [
-              "riff's verification service. It attests proofs checked off-chain",
-              "(YouTube, the Spotify profile code, a website) and co-signs claims."
+              "riff's verification service. It checks proofs off-chain (a Spotify",
+              "for Artists email, the Spotify bio code, YouTube, a website), attests",
+              "them here, and co-signs riff claims."
             ],
             "type": "pubkey"
-          },
-          {
-            "name": "attestors",
-            "docs": [
-              "Ethereum addresses of the Reclaim attestors whose signatures count."
-            ],
-            "type": {
-              "vec": {
-                "array": [
-                  "u8",
-                  20
-                ]
-              }
-            }
-          },
-          {
-            "name": "reclaimProviderHash",
-            "docs": [
-              "Reclaim's hash of riff's Spotify for Artists provider: only proofs",
-              "from that provider count."
-            ],
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           },
           {
             "name": "rpIdHash",
@@ -2165,26 +1951,6 @@ export type RiffPassport = {
           {
             "name": "verifier",
             "type": "pubkey"
-          },
-          {
-            "name": "attestors",
-            "type": {
-              "vec": {
-                "array": [
-                  "u8",
-                  20
-                ]
-              }
-            }
-          },
-          {
-            "name": "reclaimProviderHash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           },
           {
             "name": "rpIdHash",
@@ -2257,25 +2023,6 @@ export type RiffPassport = {
       }
     },
     {
-      "name": "proofBuffer",
-      "docs": [
-        "A Reclaim proof, uploaded in pieces before it's verified."
-      ],
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "data",
-            "type": "bytes"
-          }
-        ]
-      }
-    },
-    {
       "name": "proofKind",
       "docs": [
         "The ways an artist can prove who they are."
@@ -2284,13 +2031,10 @@ export type RiffPassport = {
         "kind": "enum",
         "variants": [
           {
-            "name": "spotifyForArtists"
+            "name": "spotifyEmail"
           },
           {
             "name": "spotifyProfileCode"
-          },
-          {
-            "name": "spotifyEmail"
           },
           {
             "name": "website"
@@ -2338,7 +2082,7 @@ export type RiffPassport = {
           {
             "name": "sourceHash",
             "docs": [
-              "Hash of what was checked (a channel ID, a domain, a Reclaim claim)."
+              "Hash of what was checked (the email's signature, the bio code, a channel ID, a domain)."
             ],
             "type": {
               "array": [
@@ -2350,13 +2094,6 @@ export type RiffPassport = {
           {
             "name": "verifiedAt",
             "type": "i64"
-          },
-          {
-            "name": "onChain",
-            "docs": [
-              "Checked by this program itself, not attested by riff's verifier."
-            ],
-            "type": "bool"
           },
           {
             "name": "bump",
@@ -2385,10 +2122,6 @@ export type RiffPassport = {
                 "name": "proofKind"
               }
             }
-          },
-          {
-            "name": "onChain",
-            "type": "bool"
           }
         ]
       }
@@ -2418,10 +2151,6 @@ export type RiffPassport = {
           {
             "name": "verifiedAt",
             "type": "i64"
-          },
-          {
-            "name": "onChain",
-            "type": "bool"
           }
         ]
       }
@@ -2601,11 +2330,6 @@ export type RiffPassport = {
     }
   ],
   "constants": [
-    {
-      "name": "bufferSeed",
-      "type": "bytes",
-      "value": "[98, 117, 102, 102, 101, 114]"
-    },
     {
       "name": "configSeed",
       "type": "bytes",

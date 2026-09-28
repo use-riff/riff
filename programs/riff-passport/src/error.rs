@@ -12,8 +12,6 @@ pub enum PassportError {
     InvalidConfig,
     #[msg("Artist ID must be spotify: plus a 22-character Spotify ID")]
     InvalidArtistId,
-    #[msg("This kind of proof can only be verified on-chain")]
-    OnChainOnly,
     #[msg("A proof doesn't belong to this artist and wallet")]
     ProofMismatch,
     #[msg("A proof is too old; prove it again")]
@@ -50,20 +48,6 @@ pub enum PassportError {
     InsufficientVault,
     #[msg("Amount must be greater than zero")]
     ZeroAmount,
-    #[msg("The proof buffer is too small or out of range")]
-    BufferOverflow,
-    #[msg("Malformed Reclaim proof")]
-    ReclaimMalformed,
-    #[msg("The Reclaim proof's claim doesn't match its identifier")]
-    ReclaimIdentifierMismatch,
-    #[msg("The Reclaim proof isn't signed by a trusted attestor")]
-    ReclaimUntrustedAttestor,
-    #[msg("The Reclaim proof is from a different provider")]
-    ReclaimWrongProvider,
-    #[msg("The Reclaim proof was made for a different wallet")]
-    ReclaimWrongWallet,
-    #[msg("The Reclaim proof is for a different artist")]
-    ReclaimWrongArtist,
     #[msg("Math overflow")]
     MathOverflow,
 }

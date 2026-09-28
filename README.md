@@ -56,13 +56,13 @@ flowchart LR
 ### Artist Passport
 
 [`programs/riff-passport`](programs/riff-passport/README.md) gives musicians
-an on-chain identity. It needs at least two independent proofs, including a
-Spotify for Artists login proof (Reclaim zkTLS) that the program verifies
-itself. A passkey, checked by Solana's secp256r1 precompile, is required for
-every sensitive action. Recovery has a public time-lock that the artist's
-other proofs can veto. The artist's riff earnings sit in a passport vault
-that riff's own claim and withdraw instructions pay into. Any app can read
-which coins the artist endorses.
+an on-chain identity. A passport needs at least two independent proofs, one
+of them strong: an email from Spotify for Artists with Spotify's signature,
+or a code in the artist's Spotify bio. After that, a passkey is required for
+every sensitive action, checked by Solana's secp256r1 precompile. Recovery
+has a public time-lock that the artist's other proofs can veto. The artist's
+riff earnings sit in a passport vault that riff's own claim and withdraw
+instructions pay into. Any app can read which coins the artist endorses.
 
 ## Deployments
 

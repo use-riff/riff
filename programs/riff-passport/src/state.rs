@@ -6,15 +6,10 @@ use crate::constants::*;
 #[derive(InitSpace)]
 pub struct PassportConfig {
     pub admin: Pubkey,
-    /// riff's verification service. It attests proofs checked off-chain
-    /// (YouTube, the Spotify profile code, a website) and co-signs claims.
+    /// riff's verification service. It checks proofs off-chain (a Spotify
+    /// for Artists email, the Spotify bio code, YouTube, a website), attests
+    /// them here, and co-signs riff claims.
     pub verifier: Pubkey,
-    /// Ethereum addresses of the Reclaim attestors whose signatures count.
-    #[max_len(MAX_ATTESTORS)]
-    pub attestors: Vec<[u8; 20]>,
-    /// Reclaim's hash of riff's Spotify for Artists provider: only proofs
-    /// from that provider count.
-    pub reclaim_provider_hash: [u8; 32],
     /// sha256 of the passkey site (the WebAuthn relying party, e.g. "riffpad.fun").
     pub rp_id_hash: [u8; 32],
     /// How long a recovery waits before it can be finalized, in seconds.
@@ -29,13 +24,12 @@ pub struct PassportConfig {
 /// The ways an artist can prove who they are.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
 pub enum ProofKind {
-    /// A Reclaim (zkTLS) proof from the artist's Spotify for Artists login,
-    /// verified by this program.
-    SpotifyForArtists,
-    /// A one-time code the artist put on their Spotify profile.
-    SpotifyProfileCode,
-    /// A DKIM-signed email from Spotify or a distributor (zkEmail).
+    /// An email from Spotify for Artists about the artist, with Spotify's
+    /// DKIM signature checked.
     SpotifyEmail,
+    /// A code, tied to the wallet, that the artist put in their Spotify bio.
+    /// Only the artist's Spotify for Artists account can edit the bio.
+    SpotifyProfileCode,
     /// A DNS record on the artist's official website.
     Website,
     /// Google login to the artist's official YouTube channel.
@@ -55,18 +49,17 @@ pub enum Strength {
 impl ProofKind {
     pub fn strength(self) -> Strength {
         match self {
-            Self::SpotifyForArtists | Self::SpotifyProfileCode | Self::SpotifyEmail => {
-                Strength::Strong
-            }
+            Self::SpotifyEmail | Self::SpotifyProfileCode => Strength::Strong,
             Self::Website | Self::YouTube => Strength::Medium,
             Self::Instagram | Self::TikTok | Self::X => Strength::Weak,
         }
     }
 
-    /// Proofs from the same place count once: three Spotify proofs are still one source.
+    /// Proofs from the same place count once: both Spotify proofs come down
+    /// to the same Spotify for Artists account, so they're one source.
     pub fn source(self) -> u8 {
         match self {
-            Self::SpotifyForArtists | Self::SpotifyProfileCode | Self::SpotifyEmail => 0,
+            Self::SpotifyEmail | Self::SpotifyProfileCode => 0,
             Self::Website => 1,
             Self::YouTube => 2,
             Self::Instagram => 3,
@@ -98,11 +91,9 @@ pub struct ProofRecord {
     pub artist_id: String,
     pub wallet: Pubkey,
     pub kind: ProofKind,
-    /// Hash of what was checked (a channel ID, a domain, a Reclaim claim).
+    /// Hash of what was checked (the email's signature, the bio code, a channel ID, a domain).
     pub source_hash: [u8; 32],
     pub verified_at: i64,
-    /// Checked by this program itself, not attested by riff's verifier.
-    pub on_chain: bool,
     pub bump: u8,
 }
 
@@ -111,7 +102,6 @@ pub struct ProofSummary {
     pub kind: ProofKind,
     pub source_hash: [u8; 32],
     pub verified_at: i64,
-    pub on_chain: bool,
 }
 
 impl From<&ProofRecord> for ProofSummary {
@@ -120,7 +110,6 @@ impl From<&ProofRecord> for ProofSummary {
             kind: r.kind,
             source_hash: r.source_hash,
             verified_at: r.verified_at,
-            on_chain: r.on_chain,
         }
     }
 }
@@ -200,13 +189,4 @@ pub struct Endorsement {
     pub status: EndorsementStatus,
     pub updated_at: i64,
     pub bump: u8,
-}
-
-/// A Reclaim proof, uploaded in pieces before it's verified.
-#[account]
-#[derive(InitSpace)]
-pub struct ProofBuffer {
-    pub wallet: Pubkey,
-    #[max_len(MAX_BUFFER_LEN)]
-    pub data: Vec<u8>,
 }

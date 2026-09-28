@@ -15,25 +15,20 @@ A public, hack-resistant identity for musicians on Solana.
 1. **Several proofs, at least one strong.** A passport needs proofs from
    at least two different sources, and one of them must be strong.
 
-   | Proof | Checked by | Strength |
+   | Proof | How riff checks it | Strength |
    |---|---|---|
-   | Spotify for Artists login (Reclaim zkTLS) | **this program, on-chain** | strong |
-   | Spotify profile code, Spotify or distributor email | riff's verifier | strong |
-   | Official website (DNS) | riff's verifier | medium |
-   | Official YouTube channel (Google login) | riff's verifier | medium |
-   | Instagram, TikTok, X | riff's verifier | weak |
+   | Email from Spotify for Artists | Spotify's DKIM signature (from `artists.spotify.com`), and the artist link inside | strong |
+   | Code in the Spotify bio | a code tied to the wallet, on the artist's public Spotify page; only their Spotify for Artists account can edit the bio | strong |
+   | Official website | a DNS record | medium |
+   | Official YouTube channel | Google login | medium |
+   | Instagram, TikTok, X | login or a post | weak |
 
-   A Reclaim attestor watches the artist's own TLS session with Spotify for
-   Artists and signs what the site returned: the artist ID the account
-   manages. The program recomputes the claim's identifier and recovers the
-   attestor's secp256k1 signature. It then checks three things:
-
-   - the proof comes from riff's provider;
-   - the proof was made for this wallet, so it can't be replayed;
-   - the artist ID matches.
-
-   riff's servers aren't trusted for this proof. Each proof is stored per
-   wallet, so nobody can block an artist by proving first.
+   Both Spotify proofs come down to the same Spotify for Artists account, so
+   they count as one source: a passport also needs YouTube, a website or a
+   social account. riff's verifier checks each proof off-chain and records
+   it with `record_proof`, co-signed by the wallet it's for. Each proof is
+   stored per wallet, so nobody can block an artist by proving first. The
+   email itself never goes on-chain: only a hash of its signature does.
 
 2. **A passkey as a second factor, checked by Solana.** When the passport is
    issued, the artist registers a passkey: Face ID, a fingerprint, Windows
@@ -71,20 +66,18 @@ A public, hack-resistant identity for musicians on Solana.
 
 | Account | Seeds | Holds |
 |---|---|---|
-| `PassportConfig` | `["config"]` | admin, riff's verifier, trusted Reclaim attestors, the Reclaim provider hash, the passkey site hash, time-lock length, free daily withdrawal, proof max age |
-| `ProofRecord` | `["proof", artist_id, wallet, kind]` | one verified proof: kind, hash of what was checked, when, and whether it was verified on-chain |
+| `PassportConfig` | `["config"]` | admin, riff's verifier, the passkey site hash, time-lock length, free daily withdrawal, proof max age |
+| `ProofRecord` | `["proof", artist_id, wallet, kind]` | one verified proof: kind, hash of what was checked, and when |
 | `Passport` | `["passport", artist_id]` | wallet, passkey, proofs, nonce, pending recovery, revoked flag, daily withdrawal window |
 | `Vault` | `["vault", passport]` | the artist's fees from every coin claimed through the passport |
 | `Endorsement` | `["endorse", passport, mint]` | endorsed or disavowed, and when |
-| `ProofBuffer` | `["buffer", wallet]` | a Reclaim proof uploaded in pieces (it's too big for one transaction) |
 
 ## Instructions
 
 | Instruction | Who |
 |---|---|
 | `initialize_config`, `update_config` | the program's upgrade authority, then the admin |
-| `record_proof` | the wallet plus riff's verifier (proofs checked off-chain) |
-| `write_buffer`, `prove_spotify_for_artists` | the wallet; the proof is verified on-chain |
+| `record_proof` | the wallet plus riff's verifier |
 | `issue_passport` | the wallet, with 2 or more fresh proofs and a passkey signature |
 | `add_proofs`, `set_wallet`, `set_passkey`, `endorse` | the wallet plus the passkey |
 | `disavow` | the wallet |
@@ -100,15 +93,18 @@ A public, hack-resistant identity for musicians on Solana.
 
 - Artists share access with their team, so "the artist" means the artist or
   their official team.
-- The Reclaim proof trusts Reclaim's attestors, as listed in the config. The
-  other proofs trust riff's verifier.
+- Proofs trust riff's verifier to check them. The passkey, the time-lock,
+  the vault and endorsements don't: the program enforces them. A
+  zero-knowledge version of the email proof, verified on-chain, would
+  remove that trust for the strongest proof.
 - A guardian can veto a legitimate recovery. That costs time, not money: the
   artist can prove again once the guardian account is secured, and the admin
   can revoke a compromised passport.
 - Coins claimed with a plain wallet before the passport existed stay with
   that wallet.
-- The Spotify for Artists proof reads the first artist the account manages.
-  Someone who manages several artists proves the one the provider extracts.
+- Anyone with a copy of a Spotify for Artists email (the artist's team, or
+  someone it was forwarded to) could use it. That's why a passport needs a
+  second source and a passkey.
 
 ## Tests
 
@@ -117,5 +113,3 @@ with riff deployed next to it.
 
 - The passkeys are real P-256 keys that sign the way browsers do, including
   the authenticator data and the client data JSON.
-- The Reclaim proofs are signed by a stand-in attestor exactly the way
-  Reclaim's attestors sign.

@@ -24,8 +24,6 @@ anchor-lang = { version = "1.2.0", features = ["init-if-needed"] }
 riff = { path = "../riff", features = ["cpi"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 solana-instructions-sysvar = "3"
-solana-keccak-hasher = "3"
-solana-secp256k1-recover = "3"
 solana-sha256-hasher = { version = "3", features = ["sha2"] }
 
 [dev-dependencies]
@@ -37,9 +35,7 @@ solana-signer = "3.0.0"
 solana-keypair = "3.0.1"
 solana-account = "3"
 p256 = { version = "0.13", features = ["ecdsa"] }
-k256 = { version = "0.13", features = ["ecdsa"] }
 sha2 = "0.10"
-sha3 = "0.10"
 base64 = "0.22"
 serde_json = "1"
 rand_core = { version = "0.6", features = ["getrandom"] }

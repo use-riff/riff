@@ -25,7 +25,7 @@ fn refuses_too_few_or_too_weak_proofs() {
     for kinds in [
         vec![ProofKind::SpotifyProfileCode],            // one proof
         vec![ProofKind::YouTube, ProofKind::Instagram], // nothing strong
-        vec![ProofKind::SpotifyProfileCode, ProofKind::SpotifyEmail], // one source (Spotify)
+        vec![ProofKind::SpotifyProfileCode, ProofKind::SpotifyEmail], // both Spotify: one source
     ] {
         let mut env = setup();
         let wallet = funded_keypair(env.svm());
@@ -46,12 +46,6 @@ fn proofs_need_the_verifier_and_count_only_for_their_own_wallet() {
     assert_error(
         send(env.svm(), ix, &[&wallet, &fake_verifier]),
         E::NotVerifier,
-    );
-
-    // The verifier can't stand in for the on-chain Spotify for Artists proof.
-    assert_error(
-        record_proof(&mut env, &wallet, ProofKind::SpotifyForArtists),
-        E::OnChainOnly,
     );
 
     // Someone else's proofs don't help this wallet.
@@ -113,111 +107,21 @@ fn one_passport_per_artist() {
     assert!(issue(&mut env, &other, &TestPasskey::new(), &DEFAULT_KINDS).is_err());
 }
 
-// ---- Spotify for Artists, verified on-chain
-
 #[test]
-fn verifies_a_spotify_for_artists_proof_on_chain() {
+fn a_spotify_email_and_youtube_make_a_passport() {
     let mut env = setup();
     let wallet = funded_keypair(env.svm());
-    let t = now(&mut env) as u32;
-    let proof = reclaim_proof(
-        &env.attestor,
-        canonical_context(&wallet.pubkey(), SPOTIFY_ID, &PROVIDER_HASH),
-        t,
-    );
-    prove_spotify(&mut env, &wallet, &proof).unwrap();
-    let record: riff_passport::ProofRecord = fetch(
-        &env.riff.svm,
-        &proof_address(ARTIST_ID, &wallet.pubkey(), ProofKind::SpotifyForArtists),
-    );
-    assert!(record.on_chain);
-    assert_eq!(record.kind, ProofKind::SpotifyForArtists);
-    // The buffer is closed and its rent refunded.
-    assert!(env
-        .svm()
-        .get_account(&buffer_address(&wallet.pubkey()))
-        .is_none_or(|a| a.lamports == 0));
-
-    // With YouTube, that's a passport.
-    record_proof(&mut env, &wallet, ProofKind::YouTube).unwrap();
-    let records = [
-        proof_address(ARTIST_ID, &wallet.pubkey(), ProofKind::SpotifyForArtists),
-        proof_address(ARTIST_ID, &wallet.pubkey(), ProofKind::YouTube),
-    ];
     let passkey = TestPasskey::new();
-    let (p, pre) = passkey.approve(
-        &passport_address(ARTIST_ID),
-        0,
-        &PasskeyAction::Register {
-            passkey: passkey.public(),
-        },
-    );
-    send_many(
-        env.svm(),
-        &[
-            pre,
-            issue_ix(&wallet.pubkey(), passkey.public(), p, &records),
-        ],
-        &[&wallet],
+    issue(
+        &mut env,
+        &wallet,
+        &passkey,
+        &[ProofKind::SpotifyEmail, ProofKind::YouTube],
     )
     .unwrap();
-}
-
-#[test]
-fn rejects_forged_or_mismatched_reclaim_proofs() {
-    let mut env = setup();
-    let wallet = funded_keypair(env.svm());
-    let t = now(&mut env) as u32;
-    let good_ctx = canonical_context(&wallet.pubkey(), SPOTIFY_ID, &PROVIDER_HASH);
-
-    // Signed by someone who isn't a trusted attestor.
-    let stranger = k256::ecdsa::SigningKey::random(&mut rand_core::OsRng);
-    assert_error(
-        prove_spotify(
-            &mut env,
-            &wallet,
-            &reclaim_proof(&stranger, good_ctx.clone(), t),
-        ),
-        E::ReclaimUntrustedAttestor,
-    );
-
-    // A real attestor signature, but the claim was edited afterwards.
-    let mut tampered = reclaim_proof(&env.attestor, good_ctx.clone(), t);
-    tampered.parameters = tampered.parameters.replace("GET", "PUT");
-    assert_error(
-        prove_spotify(&mut env, &wallet, &tampered),
-        E::ReclaimUntrustedAttestor,
-    );
-
-    // Made for another wallet: can't be replayed.
-    let thief = Keypair::new();
-    let ctx = canonical_context(&thief.pubkey(), SPOTIFY_ID, &PROVIDER_HASH);
-    let proof = reclaim_proof(&env.attestor, ctx, t);
-    assert_error(
-        prove_spotify(&mut env, &wallet, &proof),
-        E::ReclaimWrongWallet,
-    );
-
-    // Another artist's Spotify for Artists account.
-    let ctx = canonical_context(&wallet.pubkey(), "0TnOYISbd1XYRBk9myaseg", &PROVIDER_HASH);
-    let proof = reclaim_proof(&env.attestor, ctx, t);
-    assert_error(
-        prove_spotify(&mut env, &wallet, &proof),
-        E::ReclaimWrongArtist,
-    );
-
-    // Another Reclaim provider (one that could extract anything).
-    let ctx = canonical_context(&wallet.pubkey(), SPOTIFY_ID, &[9u8; 32]);
-    let proof = reclaim_proof(&env.attestor, ctx, t);
-    assert_error(
-        prove_spotify(&mut env, &wallet, &proof),
-        E::ReclaimWrongProvider,
-    );
-
-    // Too old.
-    let old = t - PROOF_MAX_AGE as u32 - 10;
-    let proof = reclaim_proof(&env.attestor, good_ctx, old);
-    assert_error(prove_spotify(&mut env, &wallet, &proof), E::ProofExpired);
+    let passport: riff_passport::Passport = fetch(&env.riff.svm, &passport_address(ARTIST_ID));
+    let kinds: Vec<_> = passport.proofs.iter().map(|p| p.kind).collect();
+    assert_eq!(kinds, vec![ProofKind::SpotifyEmail, ProofKind::YouTube]);
 }
 
 // ---- passkeys

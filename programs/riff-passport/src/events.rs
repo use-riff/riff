@@ -7,7 +7,6 @@ pub struct ProofRecorded {
     pub artist_id: String,
     pub wallet: Pubkey,
     pub kind: ProofKind,
-    pub on_chain: bool,
 }
 
 #[event]

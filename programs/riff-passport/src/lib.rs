@@ -1,8 +1,8 @@
 //! Artist Passport: a public, hack-resistant identity for musicians on Solana.
 //!
 //! An artist proves who they are with at least two independent proofs, one
-//! of them strong (a zero-knowledge proof from Spotify for Artists, checked
-//! here on-chain). Every sensitive action then needs a second factor that
+//! of them strong (an email from Spotify for Artists, or a code in their
+//! Spotify bio). Every sensitive action then needs a second factor that
 //! Solana itself checks: a passkey. The artist's riff earnings belong to the
 //! passport's vault, and any app can read which coins the artist endorses.
 
@@ -11,7 +11,6 @@ pub mod error;
 pub mod events;
 pub mod instructions;
 pub mod passkey;
-pub mod reclaim;
 pub mod state;
 
 use anchor_lang::prelude::*;
@@ -19,7 +18,6 @@ use anchor_lang::prelude::*;
 pub use constants::*;
 pub use instructions::*;
 pub use passkey::{PasskeyAction, PasskeyProof};
-pub use reclaim::ReclaimProof;
 pub use state::*;
 
 declare_id!("2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj");
@@ -50,17 +48,6 @@ pub mod riff_passport {
         source_hash: [u8; 32],
     ) -> Result<()> {
         proofs::handle_record_proof(ctx, artist_id, kind, source_hash)
-    }
-
-    pub fn write_buffer(ctx: Context<WriteBuffer>, offset: u32, bytes: Vec<u8>) -> Result<()> {
-        proofs::handle_write_buffer(ctx, offset, bytes)
-    }
-
-    pub fn prove_spotify_for_artists(
-        ctx: Context<ProveSpotifyForArtists>,
-        artist_id: String,
-    ) -> Result<()> {
-        proofs::handle_prove_spotify_for_artists(ctx, artist_id)
     }
 
     pub fn issue_passport<'info>(

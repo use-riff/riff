@@ -11,8 +11,6 @@ use crate::{
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct PassportConfigParams {
     pub verifier: Pubkey,
-    pub attestors: Vec<[u8; 20]>,
-    pub reclaim_provider_hash: [u8; 32],
     pub rp_id_hash: [u8; 32],
     pub recovery_delay: i64,
     pub free_withdraw_per_day: u64,
@@ -22,16 +20,10 @@ pub struct PassportConfigParams {
 impl PassportConfigParams {
     fn apply(self, config: &mut PassportConfig) -> Result<()> {
         require!(
-            !self.attestors.is_empty() && self.attestors.len() <= MAX_ATTESTORS,
-            PassportError::InvalidConfig
-        );
-        require!(
             self.recovery_delay > 0 && self.proof_max_age > 0,
             PassportError::InvalidConfig
         );
         config.verifier = self.verifier;
-        config.attestors = self.attestors;
-        config.reclaim_provider_hash = self.reclaim_provider_hash;
         config.rp_id_hash = self.rp_id_hash;
         config.recovery_delay = self.recovery_delay;
         config.free_withdraw_per_day = self.free_withdraw_per_day;

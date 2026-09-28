@@ -8,14 +8,13 @@ pub mod riff_env;
 use anchor_lang::{
     prelude::{Clock, Pubkey},
     solana_program::{bpf_loader_upgradeable, instruction::Instruction, system_program},
-    AnchorSerialize, InstructionData, ToAccountMetas,
+    InstructionData, ToAccountMetas,
 };
 use base64::Engine;
 use litesvm::types::TransactionResult;
 use p256::ecdsa::{signature::Signer as _, Signature as P256Signature, SigningKey as P256Key};
-use riff_passport::{PasskeyAction, PasskeyProof, ProofKind, ReclaimProof};
+use riff_passport::{PasskeyAction, PasskeyProof, ProofKind};
 use sha2::{Digest, Sha256};
-use sha3::Keccak256;
 use solana_keypair::Keypair;
 use solana_signer::Signer;
 
@@ -30,11 +29,9 @@ pub const RP_ID: &str = "riffpad.fun";
 pub const RECOVERY_DELAY: i64 = 72 * 60 * 60;
 pub const FREE_PER_DAY: u64 = SOL / 10;
 pub const PROOF_MAX_AGE: i64 = 7 * 24 * 60 * 60;
-pub const PROVIDER_HASH: [u8; 32] = [7u8; 32];
 
 pub struct Env {
     pub riff: riff_env::Env,
-    pub attestor: k256::ecdsa::SigningKey,
 }
 
 impl Env {
@@ -78,13 +75,6 @@ pub fn proof_address(artist_id: &str, wallet: &Pubkey, kind: ProofKind) -> Pubke
     )
     .0
 }
-pub fn buffer_address(wallet: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(
-        &[riff_passport::BUFFER_SEED, wallet.as_ref()],
-        &riff_passport::ID,
-    )
-    .0
-}
 pub fn endorsement_address(passport: &Pubkey, mint: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(
         &[
@@ -97,18 +87,9 @@ pub fn endorsement_address(passport: &Pubkey, mint: &Pubkey) -> Pubkey {
     .0
 }
 
-/// The Ethereum address of a secp256k1 key, as Reclaim identifies attestors.
-pub fn eth_address(key: &k256::ecdsa::SigningKey) -> [u8; 20] {
-    let point = key.verifying_key().to_encoded_point(false);
-    let hash = Keccak256::digest(&point.as_bytes()[1..]);
-    hash[12..].try_into().unwrap()
-}
-
 pub fn config_params(env: &Env) -> riff_passport::PassportConfigParams {
     riff_passport::PassportConfigParams {
         verifier: env.riff.verifier.pubkey(),
-        attestors: vec![eth_address(&env.attestor)],
-        reclaim_provider_hash: PROVIDER_HASH,
         rp_id_hash: Sha256::digest(RP_ID.as_bytes()).into(),
         recovery_delay: RECOVERY_DELAY,
         free_withdraw_per_day: FREE_PER_DAY,
@@ -133,10 +114,7 @@ pub fn setup() -> Env {
         .unwrap();
     riff_env::initialize_config(&mut riff);
 
-    let mut env = Env {
-        riff,
-        attestor: k256::ecdsa::SigningKey::random(&mut rand_core::OsRng),
-    };
+    let mut env = Env { riff };
     let admin = env.riff.admin.insecure_clone();
     let ix = ix(
         riff_passport::instruction::InitializeConfig {
@@ -202,97 +180,6 @@ pub fn record_proof(env: &mut Env, wallet: &Keypair, kind: ProofKind) -> Transac
     let verifier = env.verifier();
     let ix = record_proof_ix(env, &wallet.pubkey(), ARTIST_ID, kind);
     send(env.svm(), ix, &[wallet, &verifier])
-}
-
-// ---- Reclaim
-
-pub fn canonical_context(wallet: &Pubkey, spotify_id: &str, provider_hash: &[u8; 32]) -> String {
-    // Keys in sorted order, as Reclaim canonicalizes contexts.
-    format!(
-        r#"{{"contextAddress":"0x0","contextMessage":"riff-passport:{wallet}","extractedParameters":{{"artistId":"{spotify_id}"}},"providerHash":"0x{}","reclaimSessionId":"abc123"}}"#,
-        hex(provider_hash)
-    )
-}
-
-pub fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-/// A Reclaim proof, signed by `attestor` exactly as Reclaim's attestors sign.
-pub fn reclaim_proof(
-    attestor: &k256::ecdsa::SigningKey,
-    context: String,
-    timestamp_s: u32,
-) -> ReclaimProof {
-    let provider = "http".to_string();
-    let parameters = r#"{"method":"GET","url":"https://generic.wg.spotify.com/s4x-me/v0/me","responseMatches":[{"type":"regex","value":"\"artistId\":\"(?<artistId>[A-Za-z0-9]{22})\""}]}"#.to_string();
-    let identifier: [u8; 32] =
-        Keccak256::digest(format!("{provider}\n{parameters}\n{context}")).into();
-    let owner = [0x11u8; 20];
-    let epoch = 1u32;
-    let data = format!(
-        "0x{}\n0x{}\n{}\n{}",
-        hex(&identifier),
-        hex(&owner),
-        timestamp_s,
-        epoch
-    );
-    let digest: [u8; 32] = Keccak256::digest(format!(
-        "\x19Ethereum Signed Message:\n{}{}",
-        data.len(),
-        data
-    ))
-    .into();
-    let (sig, recid) = attestor.sign_prehash_recoverable(&digest).unwrap();
-    let mut signature = [0u8; 65];
-    signature[..64].copy_from_slice(&sig.to_bytes());
-    signature[64] = 27 + recid.to_byte();
-    ReclaimProof {
-        provider,
-        parameters,
-        context,
-        owner,
-        timestamp_s,
-        epoch,
-        signature,
-    }
-}
-
-/// Uploads the proof in pieces, then verifies it on-chain.
-pub fn prove_spotify(env: &mut Env, wallet: &Keypair, proof: &ReclaimProof) -> TransactionResult {
-    let mut bytes = Vec::new();
-    proof.serialize(&mut bytes).unwrap();
-    for (i, chunk) in bytes.chunks(700).enumerate() {
-        let ix = ix(
-            riff_passport::instruction::WriteBuffer {
-                offset: (i * 700) as u32,
-                bytes: chunk.to_vec(),
-            },
-            riff_passport::accounts::WriteBuffer {
-                wallet: wallet.pubkey(),
-                buffer: buffer_address(&wallet.pubkey()),
-                system_program: system_program::ID,
-            },
-        );
-        send(env.svm(), ix, &[wallet]).unwrap();
-    }
-    let ix = ix(
-        riff_passport::instruction::ProveSpotifyForArtists {
-            artist_id: ARTIST_ID.into(),
-        },
-        riff_passport::accounts::ProveSpotifyForArtists {
-            wallet: wallet.pubkey(),
-            config: config_address(),
-            buffer: buffer_address(&wallet.pubkey()),
-            proof_record: proof_address(ARTIST_ID, &wallet.pubkey(), ProofKind::SpotifyForArtists),
-            system_program: system_program::ID,
-        },
-    );
-    send_many(
-        env.svm(),
-        &[riff_env::compute_budget_ix(400_000), ix],
-        &[wallet],
-    )
 }
 
 pub fn now(env: &mut Env) -> i64 {
