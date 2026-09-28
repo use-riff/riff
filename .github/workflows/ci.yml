@@ -74,6 +74,11 @@ jobs:
       - name: Build for devnet
         run: make build-devnet
 
+      # Meteora's program for the riff-dbc prototype's tests: downloaded from
+      # mainnet and checked against a pinned hash, not committed (licence).
+      - name: Download Meteora DBC program
+        run: make dbc-fixtures
+
       - name: Test
         run: cargo test
 

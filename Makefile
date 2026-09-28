@@ -2,7 +2,7 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet test fmt lint clean deploy-devnet idl vectors
+.PHONY: build build-devnet test fmt lint clean deploy-devnet idl vectors dbc-fixtures
 
 build:
 	anchor build --arch $(ARCH)
@@ -45,3 +45,15 @@ deploy-devnet: build-devnet
 	solana program deploy target/deploy/riff-devnet.so \
 	  --program-id target/deploy/riff-keypair.json \
 	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
+
+# Prototype (programs/riff-dbc): Meteora's Dynamic Bonding Curve program, as
+# deployed on mainnet, for the tests. Its source is under a non-commercial
+# licence, so it's downloaded rather than committed; the hash pins the exact
+# build (update it on purpose when Meteora upgrades the program).
+DBC_PROGRAM_ID := dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN
+DBC_SO := programs/riff-dbc/tests/fixtures/dynamic_bonding_curve.so
+DBC_SHA256 := 4c26a8a5da99f8ce932fa0300c46675b527090021fbb74214c9486bedda9f23b
+
+dbc-fixtures:
+	solana program dump $(DBC_PROGRAM_ID) $(DBC_SO) --url https://api.mainnet-beta.solana.com
+	echo "$(DBC_SHA256)  $(DBC_SO)" | sha256sum -c -

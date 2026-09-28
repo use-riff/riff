@@ -6,3 +6,5 @@ node_modules
 test-ledger
 .yarn
 .surfpool
+# Meteora's program isn't ours to redistribute: `make dbc-fixtures` downloads it.
+programs/riff-dbc/tests/fixtures/dynamic_bonding_curve.so
