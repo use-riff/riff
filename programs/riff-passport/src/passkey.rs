@@ -183,6 +183,40 @@ pub fn base64url_decode(text: &str) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// The same vectors are in riff-site's client tests, so the browser and
+    /// the program agree on every challenge byte.
+    #[test]
+    fn challenge_vectors() {
+        let passport = Pubkey::new_from_array([1; 32]);
+        let withdraw = PasskeyAction::Withdraw {
+            to: Pubkey::new_from_array([2; 32]),
+            amount: 5,
+        };
+        assert_eq!(
+            hex(&challenge(&passport, 7, &withdraw).unwrap()),
+            "ddc9265a889d722217397f0938acd066a8768e63e9ba4e7a5b4e62d7e47d9a0d"
+        );
+        let register = PasskeyAction::Register { passkey: [3; 33] };
+        assert_eq!(
+            hex(&challenge(&passport, 0, &register).unwrap()),
+            "e4eabeee9c2653c111ed24e5ce0bad8e3fe19c3ee299ed781993437a2c219a0e"
+        );
+        let add = PasskeyAction::AddProofs {
+            records: vec![
+                Pubkey::new_from_array([4; 32]),
+                Pubkey::new_from_array([5; 32]),
+            ],
+        };
+        assert_eq!(
+            hex(&challenge(&passport, 2, &add).unwrap()),
+            "a2db009f1680c1a5e24852e0299d1d3d788f69f911d1b54748fa2237dc4845d5"
+        );
+    }
+
     #[test]
     fn decodes_base64url() {
         assert_eq!(base64url_decode("aGVsbG8").unwrap(), b"hello");
