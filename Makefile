@@ -2,7 +2,7 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet test fmt lint clean deploy-devnet idl vectors
+.PHONY: build build-devnet test fmt lint clean deploy-devnet deploy-passport-devnet idl vectors
 
 build:
 	anchor build --arch $(ARCH)
@@ -47,3 +47,9 @@ deploy-devnet: build-devnet
 	solana program deploy target/deploy/riff-devnet.so \
 	  --program-id target/deploy/riff-keypair.json \
 	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
+
+deploy-passport-devnet: build
+	solana program deploy target/deploy/riff_passport.so \
+	  --program-id target/deploy/riff_passport-keypair.json \
+	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
+

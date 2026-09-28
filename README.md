@@ -70,6 +70,7 @@ instructions pay into. Any app can read which coins the artist endorses.
 |---|---|---|---|
 | devnet | `59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV` | `96rEETSfoVcoUVjtBffBhjutmyynSrRfgDfjC3X7P4hK` | live, for testing |
 | mainnet-beta | — | — | not deployed |
+| devnet (Artist Passport) | `2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj` | see `deployments.json` | live, for testing |
 
 [`deployments.json`](deployments.json) has the details: build settings,
 Raydium addresses and authorities. Before trusting an address, check that the
