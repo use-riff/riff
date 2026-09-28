@@ -13,7 +13,7 @@ off-chain services live elsewhere.
 
 ## Try it
 
-**Live demo: https://riff-gold-nu.vercel.app** (devnet, free test SOL).
+**Live demo: https://riffpad.fun** (devnet, free test SOL).
 
 1. Set your wallet (Phantom, Solflare, ...) to devnet and get test SOL at
    https://faucet.solana.com.
