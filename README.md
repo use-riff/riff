@@ -53,6 +53,17 @@ flowchart LR
   link an unclaimed coin to a wallet; it can't touch curve SOL, other fees or
   claimed coins.
 
+### Artist Passport
+
+[`programs/riff-passport`](programs/riff-passport/README.md) gives musicians
+an on-chain identity. It needs at least two independent proofs, including a
+Spotify for Artists login proof (Reclaim zkTLS) that the program verifies
+itself. A passkey, checked by Solana's secp256r1 precompile, is required for
+every sensitive action. Recovery has a public time-lock that the artist's
+other proofs can veto. The artist's riff earnings sit in a passport vault
+that riff's own claim and withdraw instructions pay into. Any app can read
+which coins the artist endorses.
+
 ## Deployments
 
 | Cluster | Program | Config | Status |
@@ -196,6 +207,7 @@ make lint
 programs/riff/src/             the program
 programs/riff/tests/           integration tests (LiteSVM)
 programs/riff/tests/fixtures/  mainnet program and account snapshots
+programs/riff-passport/        Artist Passport: verified artist identity, passkey 2FA, vault
 idl/                           Anchor IDL and TypeScript types (generated)
 vectors/curve.json             curve-math test vectors (generated)
 deployments.json               where riff is deployed and how it was built
@@ -204,7 +216,8 @@ docs/AUDIT_PACKAGE.md          for auditors
 
 ## Published files
 
-- `idl/riff.json`, `idl/riff.ts`: the program's interface, from `make idl`.
+- `idl/riff.json`, `idl/riff.ts`, `idl/riff_passport.json`,
+  `idl/riff_passport.ts`: the programs' interfaces, from `make idl`.
 - `vectors/curve.json`: thousands of buy, sell and fee-split cases computed by
   the program's own math, from `make vectors`. Any off-chain port of the
   curve should reproduce them exactly.

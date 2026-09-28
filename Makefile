@@ -13,6 +13,8 @@ idl: build
 	mkdir -p idl
 	cp target/idl/riff.json idl/riff.json
 	cp target/types/riff.ts idl/riff.ts
+	cp target/idl/riff_passport.json idl/riff_passport.json
+	cp target/types/riff_passport.ts idl/riff_passport.ts
 
 # Regenerate vectors/curve.json from the program's curve math.
 vectors:

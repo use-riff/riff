@@ -8,6 +8,7 @@ skip-lint = false
 
 [programs.localnet]
 riff = "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
+riff_passport = "2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj"
 
 [provider]
 cluster = "localnet"
