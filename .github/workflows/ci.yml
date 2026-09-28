@@ -68,16 +68,16 @@ jobs:
           install -m 0755 /tmp/anchor "$HOME/.local/bin/anchor"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # Meteora's program for the riff-dbc prototype's tests: downloaded from
+      # mainnet and checked against a pinned hash, not committed (licence).
+      - name: Download Meteora DBC program
+        run: make dbc-fixtures
+
       - name: Build (SBPF v0)
         run: make build
 
       - name: Build for devnet
         run: make build-devnet
-
-      # Meteora's program for the riff-dbc prototype's tests: downloaded from
-      # mainnet and checked against a pinned hash, not committed (licence).
-      - name: Download Meteora DBC program
-        run: make dbc-fixtures
 
       - name: Test
         run: cargo test
