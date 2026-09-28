@@ -8,6 +8,7 @@ skip-lint = false
 
 [programs.localnet]
 riff = "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
+riff_dbc = "gATYd3vfHCPCrhFupj8HxVX78syyXNfPSbYRsttm9RF"
 
 [provider]
 cluster = "localnet"

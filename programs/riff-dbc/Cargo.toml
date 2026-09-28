@@ -1,0 +1,42 @@
+[package]
+name = "riff-dbc"
+version = "0.0.1"
+description = "Prototype: riff on Meteora's Dynamic Bonding Curve"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "riff_dbc"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+# Meteora's program has the same address on devnet and mainnet; the feature
+# only exists so `make build-devnet` can build the whole workspace.
+devnet = []
+
+[dependencies]
+anchor-lang = "1.2.0"
+anchor-spl = { version = "1.2.0", default-features = false, features = ["associated_token", "token", "token_2022"] }
+# declare_program! derives zero-copy layouts for Meteora's accounts.
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
+
+[dev-dependencies]
+litesvm = "0.10.0"
+solana-message = "3.0.1"
+solana-transaction = "3.0.2"
+solana-signer = "3.0.0"
+solana-keypair = "3.0.1"
+base64 = "0.22"
+serde_json = "1"
+solana-account = "3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
