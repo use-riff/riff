@@ -18,6 +18,9 @@ idl-build = ["anchor-lang/idl-build", "riff/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
+# `make build-devnet` builds every program with this feature; riff uses it for
+# Raydium's devnet addresses. The passport has no devnet differences of its own.
+devnet = ["riff/devnet"]
 
 [dependencies]
 anchor-lang = { version = "1.2.0", features = ["init-if-needed"] }
