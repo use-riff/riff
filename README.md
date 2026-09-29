@@ -206,7 +206,7 @@ make lint
 
 ```
 programs/riff/src/             the program
-programs/riff/tests/           integration tests (LiteSVM)
+programs/riff/tests/           integration tests (LiteSVM), one binary: tests/all/
 programs/riff/tests/fixtures/  mainnet program and account snapshots
 programs/riff-passport/        Artist Passport: verified artist identity, passkey 2FA, vault
 idl/                           Anchor IDL and TypeScript types (generated)

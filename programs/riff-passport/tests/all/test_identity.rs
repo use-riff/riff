@@ -1,6 +1,4 @@
-mod common;
-
-use common::*;
+use crate::common::*;
 use riff_passport::{error::PassportError as E, EndorsementStatus, PasskeyAction, ProofKind};
 use solana_keypair::Keypair;
 use solana_signer::Signer;

@@ -1,6 +1,5 @@
-mod common;
-
 use {
+    crate::common::*,
     anchor_lang::prelude::Pubkey,
     anchor_spl::{
         token_2022::{
@@ -14,7 +13,6 @@ use {
         },
         token_interface::spl_token_metadata_interface::state::TokenMetadata,
     },
-    common::*,
     riff::{error::ErrorCode, COIN_DECIMALS, COIN_TOTAL_SUPPLY},
     solana_keypair::Keypair,
     solana_signer::Signer,

@@ -1,7 +1,5 @@
-mod common;
-
+use crate::common::*;
 use anchor_lang::solana_program::instruction::AccountMeta;
-use common::*;
 use riff_passport::{error::PassportError as E, PasskeyAction, ProofKind};
 use solana_keypair::Keypair;
 use solana_signer::Signer;
@@ -20,7 +18,7 @@ fn the_vault_is_the_coins_artist_and_collects_its_fees() {
     let (wallet, _) = issued(&mut env);
     let mint = claimed_coin(&mut env, &wallet);
     let vault = vault_address(&passport_address(ARTIST_ID));
-    let coin: riff::Coin = fetch(&env.riff.svm, &common::riff_env::coin_address(&mint));
+    let coin: riff::Coin = fetch(&env.riff.svm, &crate::common::riff_env::coin_address(&mint));
     assert_eq!(coin.artist, Some(vault));
     let fees = coin.artist_fees;
     assert!(fees > 0);
@@ -47,7 +45,7 @@ fn claiming_needs_the_passport_wallet_and_riffs_verifier() {
     let mut ix = claim_coin_ix(&env, &wallet.pubkey(), &mint);
     ix.accounts[1].pubkey = fake.pubkey();
     let res = send(env.svm(), ix, &[&wallet, &fake]);
-    common::riff_env::assert_riff_error(res, riff::error::ErrorCode::NotVerifier);
+    crate::common::riff_env::assert_riff_error(res, riff::error::ErrorCode::NotVerifier);
 }
 
 #[test]
