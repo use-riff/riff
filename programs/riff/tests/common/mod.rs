@@ -78,7 +78,8 @@ pub fn vault_address(mint: &Pubkey) -> Pubkey {
 /// Fresh VM with riff deployed and `admin` set as its upgrade authority.
 pub fn setup() -> Env {
     let mut svm = LiteSVM::new();
-    let bytes = include_bytes!(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/riff.so"));
+    let bytes = &std::fs::read(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/riff.so"))
+        .expect("riff.so is missing: run `make build` first");
     svm.add_program(riff::ID, bytes).unwrap();
     load_live_token_programs(&mut svm);
     load_raydium(&mut svm);

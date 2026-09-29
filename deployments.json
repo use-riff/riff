@@ -25,5 +25,23 @@
       "raydiumCpmm": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
       "raydiumAmmConfig": "D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2"
     }
+  },
+  "passport": {
+    "program": "riff-passport",
+    "build": "make build (same toolchain as riff; no devnet feature)",
+    "clusters": {
+      "devnet": {
+        "status": "live, for testing",
+        "programId": "2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj",
+        "config": "5S3RcpLwjs8eJ4GoV1stc2YeQNqvvKwhFS28iz5zM5ip",
+        "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
+        "binarySha256": "b53eaf2681783fad81010fe6d0ee9d7b683456cff7404d926488cde877180482",
+        "notes": "5-minute recovery time-lock (72 hours planned for mainnet), 0.1 SOL a day without the passkey, proofs valid for 7 days, passkeys for riffpad.fun."
+      },
+      "mainnet-beta": {
+        "status": "not deployed",
+        "programId": null
+      }
+    }
   }
 }

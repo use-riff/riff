@@ -1,0 +1,11 @@
+# cargo audit settings (CI fails on any advisory not listed here).
+[advisories]
+ignore = [
+  # ed25519-dalek 1.0.1 and its curve25519-dalek 3.2.0: test-only. They come
+  # from LiteSVM's `precompiles` feature (agave-precompiles), which the
+  # passport tests need to run Solana's real secp256r1 precompile. Neither
+  # crate is compiled into riff or riff-passport, and the tests never sign
+  # with ed25519-dalek. Remove once LiteSVM moves to ed25519-dalek 2.
+  "RUSTSEC-2022-0093",
+  "RUSTSEC-2024-0344",
+]

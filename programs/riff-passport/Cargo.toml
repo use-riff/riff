@@ -1,0 +1,48 @@
+[package]
+name = "riff-passport"
+version = "0.1.0"
+description = "Artist Passport: a multi-proof, passkey-protected on-chain identity for musicians"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "riff_passport"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "riff/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+# `make build-devnet` builds every program with this feature; riff uses it for
+# Raydium's devnet addresses. The passport has no devnet differences of its own.
+devnet = ["riff/devnet"]
+
+[dependencies]
+anchor-lang = { version = "1.2.0", features = ["init-if-needed"] }
+riff = { path = "../riff", features = ["cpi"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+solana-instructions-sysvar = "3"
+solana-sha256-hasher = { version = "3", features = ["sha2"] }
+
+[dev-dependencies]
+anchor-spl = { version = "1.2.0", default-features = false, features = ["associated_token", "token", "token_2022", "token_2022_extensions"] }
+litesvm = { version = "0.10.0", features = ["precompiles"] }
+solana-message = "3.0.1"
+solana-transaction = "3.0.2"
+solana-signer = "3.0.0"
+solana-keypair = "3.0.1"
+solana-account = "3"
+p256 = { version = "0.13", features = ["ecdsa"] }
+sha2 = "0.10"
+base64 = "0.22"
+serde_json = "1"
+rand_core = { version = "0.6", features = ["getrandom"] }
+solana-instructions-sysvar = "3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
