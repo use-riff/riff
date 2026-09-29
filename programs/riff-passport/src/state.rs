@@ -73,13 +73,23 @@ impl ProofKind {
     }
 }
 
-/// Enough proof for a passport: 2 or more sources, at least one strong.
+/// Enough proof for a passport (or a recovery). Either:
+/// - both Spotify proofs, the DKIM-checked Spotify for Artists email and the
+///   wallet-bound bio code: two different strong checks, even though they
+///   come from one Spotify for Artists account; or
+/// - proofs from 2 or more sources, at least one of them strong.
+///
+/// Kinds are counted once each, so repeating a proof never adds to it.
 pub fn proofs_suffice(kinds: &[ProofKind]) -> bool {
+    let both_spotify =
+        kinds.contains(&ProofKind::SpotifyEmail) && kinds.contains(&ProofKind::SpotifyProfileCode);
     let mut sources = 0u8;
     for kind in kinds {
         sources |= 1 << kind.source();
     }
-    sources.count_ones() >= 2 && kinds.iter().any(|k| k.strength() == Strength::Strong)
+    let two_sources_one_strong =
+        sources.count_ones() >= 2 && kinds.iter().any(|k| k.strength() == Strength::Strong);
+    both_spotify || two_sources_one_strong
 }
 
 /// One verified proof that `wallet` speaks for `artist_id`. Proofs are kept

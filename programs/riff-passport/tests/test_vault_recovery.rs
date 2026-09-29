@@ -307,6 +307,79 @@ fn the_artist_vetoes_with_their_passkey_or_a_guardian_proof() {
 }
 
 #[test]
+fn both_spotify_proofs_start_a_recovery_that_can_still_be_vetoed() {
+    let mut env = setup();
+    let (wallet, passkey) = issued(&mut env);
+    let passport = passport_address(ARTIST_ID);
+    let spotify_only = [ProofKind::SpotifyEmail, ProofKind::SpotifyProfileCode];
+
+    // Someone with the artist's Spotify for Artists account asks for the passport.
+    let attacker = funded_keypair(env.svm());
+    request_recovery(&mut env, &attacker, &TestPasskey::new(), &spotify_only).unwrap();
+    let recovery = fetch::<riff_passport::Passport>(&env.riff.svm, &passport)
+        .recovery
+        .unwrap();
+    assert_eq!(recovery.new_wallet, attacker.pubkey());
+
+    // It still waits out the time-lock...
+    let anyone = funded_keypair(env.svm());
+    assert_error(
+        send(env.svm(), finalize_ix(), &[&anyone]),
+        E::RecoveryLocked,
+    );
+
+    // ...and the artist's passkey vetoes it.
+    let (proof, pre) = passkey.approve(
+        &passport,
+        nonce(&env),
+        &PasskeyAction::Veto {
+            new_wallet: attacker.pubkey(),
+        },
+    );
+    send_many(
+        env.svm(),
+        &[pre, veto_ix(&wallet.pubkey(), Some(proof), None)],
+        &[&wallet],
+    )
+    .unwrap();
+    assert!(fetch::<riff_passport::Passport>(&env.riff.svm, &passport)
+        .recovery
+        .is_none());
+
+    // Again, and this time the artist's YouTube (a guardian) vetoes.
+    advance_time(env.svm(), 10);
+    let attacker2 = funded_keypair(env.svm());
+    request_recovery(&mut env, &attacker2, &TestPasskey::new(), &spotify_only).unwrap();
+    advance_time(env.svm(), 10);
+    let phone = funded_keypair(env.svm());
+    record_proof(&mut env, &phone, ProofKind::YouTube).unwrap();
+    let guardian = proof_address(ARTIST_ID, &phone.pubkey(), ProofKind::YouTube);
+    send(
+        env.svm(),
+        veto_ix(&phone.pubkey(), None, Some(guardian)),
+        &[&phone],
+    )
+    .unwrap();
+    assert!(fetch::<riff_passport::Passport>(&env.riff.svm, &passport)
+        .recovery
+        .is_none());
+}
+
+#[test]
+fn one_spotify_proof_is_not_enough_to_start_a_recovery() {
+    let mut env = setup();
+    issued(&mut env);
+    let hacker = funded_keypair(env.svm());
+    let res = request_recovery(
+        &mut env,
+        &hacker,
+        &TestPasskey::new(),
+        &[ProofKind::SpotifyProfileCode],
+    );
+    assert_error(res, E::NotEnoughProofs);
+}
+
+#[test]
 fn only_one_recovery_at_a_time() {
     let mut env = setup();
     issued(&mut env);

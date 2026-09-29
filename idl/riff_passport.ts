@@ -1601,7 +1601,7 @@ export type RiffPassport = {
     {
       "code": 6007,
       "name": "notEnoughProofs",
-      "msg": "Needs at least 2 proofs from different sources, including a strong one"
+      "msg": "Needs both Spotify proofs, or proofs from 2 different sources including a strong one"
     },
     {
       "code": 6008,

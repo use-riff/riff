@@ -1,7 +1,9 @@
 mod common;
 
 use common::*;
-use riff_passport::{error::PassportError as E, EndorsementStatus, PasskeyAction, ProofKind};
+use riff_passport::{
+    error::PassportError as E, proofs_suffice, EndorsementStatus, PasskeyAction, ProofKind,
+};
 use solana_keypair::Keypair;
 use solana_signer::Signer;
 
@@ -24,8 +26,9 @@ fn issues_a_passport_with_two_sources_including_a_strong_one() {
 fn refuses_too_few_or_too_weak_proofs() {
     for kinds in [
         vec![ProofKind::SpotifyProfileCode],            // one proof
+        vec![ProofKind::SpotifyEmail],                  // one proof
         vec![ProofKind::YouTube, ProofKind::Instagram], // nothing strong
-        vec![ProofKind::SpotifyProfileCode, ProofKind::SpotifyEmail], // both Spotify: one source
+        vec![ProofKind::YouTube, ProofKind::Website],   // two sources, nothing strong
     ] {
         let mut env = setup();
         let wallet = funded_keypair(env.svm());
@@ -122,6 +125,88 @@ fn a_spotify_email_and_youtube_make_a_passport() {
     let passport: riff_passport::Passport = fetch(&env.riff.svm, &passport_address(ARTIST_ID));
     let kinds: Vec<_> = passport.proofs.iter().map(|p| p.kind).collect();
     assert_eq!(kinds, vec![ProofKind::SpotifyEmail, ProofKind::YouTube]);
+}
+
+#[test]
+fn both_spotify_proofs_make_a_passport() {
+    let mut env = setup();
+    let wallet = funded_keypair(env.svm());
+    let passkey = TestPasskey::new();
+    issue(
+        &mut env,
+        &wallet,
+        &passkey,
+        &[ProofKind::SpotifyEmail, ProofKind::SpotifyProfileCode],
+    )
+    .unwrap();
+    let passport: riff_passport::Passport = fetch(&env.riff.svm, &passport_address(ARTIST_ID));
+    let kinds: Vec<_> = passport.proofs.iter().map(|p| p.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![ProofKind::SpotifyEmail, ProofKind::SpotifyProfileCode]
+    );
+}
+
+#[test]
+fn the_same_spotify_proof_twice_is_not_enough() {
+    for kind in [ProofKind::SpotifyEmail, ProofKind::SpotifyProfileCode] {
+        let mut env = setup();
+        let wallet = funded_keypair(env.svm());
+        record_proof(&mut env, &wallet, kind).unwrap();
+        let record = proof_address(ARTIST_ID, &wallet.pubkey(), kind);
+        let passkey = TestPasskey::new();
+        let (proof, pre) = passkey.approve(
+            &passport_address(ARTIST_ID),
+            0,
+            &PasskeyAction::Register {
+                passkey: passkey.public(),
+            },
+        );
+        let ix = issue_ix(&wallet.pubkey(), passkey.public(), proof, &[record, record]);
+        assert_error(
+            send_many(env.svm(), &[pre, ix], &[&wallet]),
+            E::ProofMismatch,
+        );
+        assert!(!proofs_suffice(&[kind, kind]));
+    }
+}
+
+/// Every set of up to two proof kinds against the rule: both Spotify proofs,
+/// or two sources with a strong one.
+#[test]
+fn the_proof_rule() {
+    use ProofKind::*;
+    let all = [
+        SpotifyEmail,
+        SpotifyProfileCode,
+        Website,
+        YouTube,
+        Instagram,
+        TikTok,
+        X,
+    ];
+    assert!(!proofs_suffice(&[]));
+    for a in all {
+        assert!(!proofs_suffice(&[a]), "{a:?} alone");
+        for b in all {
+            let spotify = |k: ProofKind| matches!(k, SpotifyEmail | SpotifyProfileCode);
+            let want = if a == b {
+                false
+            } else if spotify(a) && spotify(b) {
+                true // both Spotify proofs
+            } else {
+                spotify(a) || spotify(b) // two sources: needs a strong one
+            };
+            assert_eq!(proofs_suffice(&[a, b]), want, "{a:?} + {b:?}");
+        }
+    }
+    // More weak and medium proofs never make up for a strong one.
+    assert!(!proofs_suffice(&[Website, YouTube, Instagram, TikTok, X]));
+    assert!(proofs_suffice(&[
+        SpotifyEmail,
+        SpotifyProfileCode,
+        Instagram
+    ]));
 }
 
 // ---- passkeys

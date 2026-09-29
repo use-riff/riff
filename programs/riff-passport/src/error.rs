@@ -16,7 +16,7 @@ pub enum PassportError {
     ProofMismatch,
     #[msg("A proof is too old; prove it again")]
     ProofExpired,
-    #[msg("Needs at least 2 proofs from different sources, including a strong one")]
+    #[msg("Needs both Spotify proofs, or proofs from 2 different sources including a strong one")]
     NotEnoughProofs,
     #[msg("Too many proofs")]
     TooManyProofs,

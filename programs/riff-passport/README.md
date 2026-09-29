@@ -12,8 +12,10 @@ A public, hack-resistant identity for musicians on Solana.
 
 ## How the passport works
 
-1. **Several proofs, at least one strong.** A passport needs proofs from
-   at least two different sources, and one of them must be strong.
+1. **Two strong proofs, or two sources.** A passport needs either:
+
+   - **both Spotify proofs** (the email and the bio code), or
+   - proofs from **at least two different sources**, one of them strong.
 
    | Proof | How riff checks it | Strength |
    |---|---|---|
@@ -24,8 +26,13 @@ A public, hack-resistant identity for musicians on Solana.
    | Instagram, TikTok, X | login or a post | weak |
 
    Both Spotify proofs come down to the same Spotify for Artists account, so
-   they count as one source: a passport also needs YouTube, a website or a
-   social account. riff's verifier checks each proof off-chain and records
+   they count as one source. But they are two different strong checks (a
+   signed email, and a wallet-bound code only that account can publish), so
+   together they are enough. Many small or anonymous artists have no official
+   YouTube channel or website to prove. YouTube, a website and social
+   accounts stay optional: each adds a second source, and becomes a guardian
+   (see recovery). One proof alone, or any number of medium and weak proofs
+   without a strong one, is never enough. riff's verifier checks each proof off-chain and records
    it with `record_proof`, co-signed by the wallet it's for. Each proof is
    stored per wallet, so nobody can block an artist by proving first. The
    email itself never goes on-chain: only a hash of its signature does.
@@ -50,9 +57,10 @@ A public, hack-resistant identity for musicians on Solana.
    - the user was verified.
 
 3. **Recovery with a time-lock and a veto.** If the artist loses a wallet or a passkey:
-   - A new wallet with fresh proofs (again two sources, one strong) and a new passkey can request a recovery.
+   - A new wallet with fresh proofs (the same rule as issuing: both Spotify proofs, or two sources with a strong one) and a new passkey can request a recovery.
    - The recovery waits out a public time-lock (72 hours on mainnet).
    - During the time-lock, the old passkey or any *guardian* can veto it. A guardian is a fresh proof of a kind already on the passport, such as the artist's YouTube. A stolen wallet alone can do nothing.
+   - So someone holding the artist's Spotify for Artists account can *start* a recovery with the two Spotify proofs alone. We accept that on purpose: they still have to wait out the public time-lock, and the artist's passkey or any guardian can veto it in that time.
 
 4. **Earnings belong to the passport.** `claim_coin` claims a riff coin with
    the passport's vault as the coin's artist. The vault is a program account
@@ -78,7 +86,7 @@ A public, hack-resistant identity for musicians on Solana.
 |---|---|
 | `initialize_config`, `update_config` | the program's upgrade authority, then the admin |
 | `record_proof` | the wallet plus riff's verifier |
-| `issue_passport` | the wallet, with 2 or more fresh proofs and a passkey signature |
+| `issue_passport` | the wallet, with enough fresh proofs (both Spotify proofs, or 2 sources with a strong one) and a passkey signature |
 | `add_proofs`, `set_wallet`, `set_passkey`, `endorse` | the wallet plus the passkey |
 | `disavow` | the wallet |
 | `request_recovery` | a new wallet, with fresh proofs and a new passkey |
@@ -103,8 +111,18 @@ A public, hack-resistant identity for musicians on Solana.
 - Coins claimed with a plain wallet before the passport existed stay with
   that wallet.
 - Anyone with a copy of a Spotify for Artists email (the artist's team, or
-  someone it was forwarded to) could use it. That's why a passport needs a
-  second source and a passkey.
+  someone it was forwarded to) could use it. That's why the email alone is
+  never enough, and why a passport needs a passkey.
+- **A Spotify-only passport rests on one account.** With just the two
+  Spotify proofs, one compromised Spotify for Artists account (or a rogue
+  team member on it) is enough to take the passport, and with it the
+  artist's coin fees. The program allows it so small artists aren't locked
+  out. riff limits the damage off-chain: its verifier won't co-sign
+  `claim_coin` for a Spotify-only passport when the coin has earned at least
+  `SPOTIFY_ONLY_REVIEW_THRESHOLD_LAMPORTS` in artist fees (1 SOL by default;
+  passports with a second source keep the usual 8 SOL). The riff team
+  reviews those claims first. Adding YouTube or a website removes the lower
+  threshold and adds a guardian.
 
 ## Tests
 
