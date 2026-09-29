@@ -1,10 +1,8 @@
 //! Two-step admin handover, e.g. from the deploy key to a Squads multisig.
 
-mod common;
-
 use {
-    anchor_lang::prelude::Pubkey, common::*, riff::error::ErrorCode, solana_keypair::Keypair,
-    solana_signer::Signer,
+    crate::common::*, anchor_lang::prelude::Pubkey, riff::error::ErrorCode,
+    solana_keypair::Keypair, solana_signer::Signer,
 };
 
 fn config(env: &Env) -> riff::Config {

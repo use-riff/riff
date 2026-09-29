@@ -2,12 +2,10 @@
 //!
 //! Runs against Raydium's real mainnet program (tests/fixtures/).
 
-mod common;
-
 use {
+    crate::common::*,
     anchor_lang::prelude::{Clock, Pubkey},
     anchor_spl::token_2022::ID as TOKEN_2022_ID,
-    common::*,
     riff::{error::ErrorCode, COIN_TOTAL_SUPPLY},
     solana_keypair::Keypair,
     solana_signer::Signer,

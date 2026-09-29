@@ -1,10 +1,9 @@
 //! The running totals each coin keeps for the app: lifetime artist share,
 //! peak price and hourly volume for the last 24 hours.
-mod common;
 
 use {
+    crate::common::*,
     anchor_lang::prelude::Pubkey,
-    common::*,
     riff::{events::Trade, VOLUME_HOURS},
     solana_keypair::Keypair,
     solana_signer::Signer,

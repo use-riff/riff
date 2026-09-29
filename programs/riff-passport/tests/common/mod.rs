@@ -102,8 +102,11 @@ pub fn setup() -> Env {
     let mut riff = riff_env::setup();
     // Read when the tests run, not compiled in: `anchor build` compiles the
     // tests (for the IDL) before every program binary exists.
-    let bytes = &std::fs::read(concat!(env!("CARGO_TARGET_TMPDIR"), "/../deploy/riff_passport.so"))
-        .expect("riff_passport.so is missing: run `make build` first");
+    let bytes = &std::fs::read(concat!(
+        env!("CARGO_TARGET_TMPDIR"),
+        "/../deploy/riff_passport.so"
+    ))
+    .expect("riff_passport.so is missing: run `make build` first");
     riff.svm.add_program(riff_passport::ID, bytes).unwrap();
     // Make riff's admin the passport program's upgrade authority too.
     let mut account = riff.svm.get_account(&passport_program_data()).unwrap();
