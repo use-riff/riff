@@ -108,6 +108,31 @@ fn one_passport_per_artist() {
 }
 
 #[test]
+fn a_spotify_proof_and_a_distributor_email_make_a_passport() {
+    let mut env = setup();
+    let wallet = funded_keypair(env.svm());
+    issue(
+        &mut env,
+        &wallet,
+        &TestPasskey::new(),
+        &[ProofKind::SpotifyProfileCode, ProofKind::Distributor],
+    )
+    .unwrap();
+    // Without a Spotify proof, two medium ones aren't enough.
+    let mut env = setup();
+    let wallet = funded_keypair(env.svm());
+    assert_error(
+        issue(
+            &mut env,
+            &wallet,
+            &TestPasskey::new(),
+            &[ProofKind::Distributor, ProofKind::AppleMusic],
+        ),
+        E::NotEnoughProofs,
+    );
+}
+
+#[test]
 fn a_spotify_email_and_youtube_make_a_passport() {
     let mut env = setup();
     let wallet = funded_keypair(env.svm());

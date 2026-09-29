@@ -19,13 +19,15 @@ A public, hack-resistant identity for musicians on Solana.
    |---|---|---|
    | Email from Spotify for Artists | Spotify's DKIM signature (from `artists.spotify.com`), and the artist link inside | strong |
    | Code in the Spotify bio | a code tied to the wallet, on the artist's public Spotify page; only their Spotify for Artists account can edit the bio | strong |
+   | Email from the distributor (DistroKid…) | the distributor's DKIM signature, and a release in it that is on the artist's Spotify profile | medium |
+   | Email from Apple Music for Artists | Apple's DKIM signature, and an Apple Music artist whose releases match the artist's Spotify releases | medium |
    | Official website | a DNS record | medium |
    | Official YouTube channel | Google login | medium |
    | Instagram, TikTok, X | login or a post | weak |
 
    Both Spotify proofs come down to the same Spotify for Artists account, so
-   they count as one source: a passport also needs YouTube, a website or a
-   social account. riff's verifier checks each proof off-chain and records
+   they count as one source: a passport also needs another one, such as the
+   distributor, Apple Music for Artists or a website. riff's verifier checks each proof off-chain and records
    it with `record_proof`, co-signed by the wallet it's for. Each proof is
    stored per wallet, so nobody can block an artist by proving first. The
    email itself never goes on-chain: only a hash of its signature does.

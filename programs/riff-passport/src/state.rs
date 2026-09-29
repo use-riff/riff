@@ -37,6 +37,12 @@ pub enum ProofKind {
     Instagram,
     TikTok,
     X,
+    /// A signed email from the artist's distributor (DistroKid…) about a
+    /// release that is on the artist's Spotify profile.
+    Distributor,
+    /// A signed email from Apple Music for Artists, about an Apple Music
+    /// artist whose releases match the artist's Spotify releases.
+    AppleMusic,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -50,7 +56,9 @@ impl ProofKind {
     pub fn strength(self) -> Strength {
         match self {
             Self::SpotifyEmail | Self::SpotifyProfileCode => Strength::Strong,
-            Self::Website | Self::YouTube => Strength::Medium,
+            Self::Website | Self::YouTube | Self::Distributor | Self::AppleMusic => {
+                Strength::Medium
+            }
             Self::Instagram | Self::TikTok | Self::X => Strength::Weak,
         }
     }
@@ -65,6 +73,8 @@ impl ProofKind {
             Self::Instagram => 3,
             Self::TikTok => 4,
             Self::X => 5,
+            Self::Distributor => 6,
+            Self::AppleMusic => 7,
         }
     }
 

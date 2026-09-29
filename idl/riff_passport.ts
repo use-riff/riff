@@ -2050,6 +2050,12 @@ export type RiffPassport = {
           },
           {
             "name": "x"
+          },
+          {
+            "name": "distributor"
+          },
+          {
+            "name": "appleMusic"
           }
         ]
       }

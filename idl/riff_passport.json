@@ -2044,6 +2044,12 @@
           },
           {
             "name": "X"
+          },
+          {
+            "name": "Distributor"
+          },
+          {
+            "name": "AppleMusic"
           }
         ]
       }
