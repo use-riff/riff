@@ -8,8 +8,20 @@ Raydium pool.
 > riff is live on **devnet** only. It is not on mainnet and has not launched a
 > token. Official launches are only announced by [@useRiffPad](https://x.com/useRiffPad).
 
-This repository holds the on-chain program only. The app and other
+This repository holds the on-chain programs only. The app and other
 off-chain services live elsewhere.
+
+**At a glance**
+
+- **Live demo:** https://riffpad.fun (devnet) · **Deck:** https://riffpad.fun/deck
+- **Two Anchor programs:** `riff` (coins, curve, fees, artist claim,
+  graduation into Raydium) and `riff-passport` (verified artist identity with
+  passkey 2FA and time-locked recovery).
+- **~3,500 lines of program code**, 30 instructions, **130 tests** on LiteSVM
+  against the real mainnet SPL Token, Token-2022 and Raydium programs.
+- **Security:** internal review with four findings fixed (H-01, M-01, M-02,
+  L-01), each with regression tests; CI with clippy, `cargo audit` and
+  gitleaks; an [audit package](docs/AUDIT_PACKAGE.md) for reviewers.
 
 ## Try it
 
@@ -26,7 +38,12 @@ off-chain services live elsewhere.
    launch buy.
 5. **Claim** a coin as its artist. A demo verifier stands in for riff's
    real artist verification on devnet.
-6. **Graduate** a sold-out coin into Raydium, then trade it there.
+6. **Get an Artist Passport** at `/passport`: prove who you are with an
+   email from Spotify for Artists (or a code in your Spotify bio) plus your
+   distributor's or Apple Music for Artists' email, then set up Face ID or a
+   fingerprint. Endorse your coins, and see what a passport says about any
+   coin at `/check`.
+7. **Graduate** a sold-out coin into Raydium, then trade it there.
 
 On devnet the curve is 100 times cheaper than on mainnet, so a coin sells out
 with about 0.85 SOL.
@@ -162,10 +179,13 @@ Every state change emits an event (`CoinCreated`, `Trade`, `ArtistClaimed`,
   deployed on mainnet (`programs/riff/tests/fixtures/`), not mocks.
 - CI builds, tests, runs clippy, `cargo audit` and gitleaks on every change,
   and checks that `idl/` and `vectors/` match the program.
-- An internal security review found three issues that are fixed, each with
+- An internal security review found four issues that are fixed, each with
   regression tests: graduation into a DEX (H-01), the artist claim and
-  charity flow (M-01), and launch-slot bundling around the creator-buy cap
-  (M-02).
+  charity flow (M-01), launch-slot bundling around the creator-buy cap
+  (M-02), and coin metadata that could change after launch (L-01).
+- The Artist Passport's passkey checks run through Solana's secp256r1
+  precompile; tests sign with real P-256 keys the way browsers do, and one
+  shows the precompile rejecting a forged signature.
 - Not yet audited externally. See [`docs/AUDIT_PACKAGE.md`](docs/AUDIT_PACKAGE.md)
   for scope, invariants and known limitations.
 
@@ -180,8 +200,8 @@ charity, graduation, trading on Raydium) working end to end in the app.
 
 - an external security audit;
 - admin and upgrade authority moved to a Squads multisig with a time lock;
-- real artist verification (Spotify for Artists plus manual review) behind
-  the verifier;
+- artist verification in production (the Artist Passport's proofs are live
+  on devnet; more distributors to come);
 - an emergency pause, and a way to undo a fraudulent claim;
 - keeping the artist's cut after graduation;
 - verifiable builds, and the move to SBPF v3 before Solana stops accepting v0
@@ -196,10 +216,11 @@ Linux or WSL2, with Rust (pinned by `rust-toolchain.toml`), Agave/Solana
 CLI 4.1.2 and Anchor CLI 1.2.0:
 
 ```bash
-make build         # anchor build --arch v0 (SBPF v0, mainnet addresses)
-make build-devnet  # devnet build (Raydium's devnet addresses)
+make build         # both programs, SBPF v0, mainnet addresses (no IDL)
+make build-devnet  # devnet build of riff (Raydium's devnet addresses)
 make test          # build, then all tests on LiteSVM; no validator needed
 make lint
+make idl           # regenerate the published IDL in idl/
 ```
 
 ## Repository layout
