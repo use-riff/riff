@@ -73,7 +73,7 @@ A public, hack-resistant identity for musicians on Solana.
    proofs and a new passkey. The vault stays, so what was claimed is the
    artist's, and the reissued passport starts a new probation.
 
-6. **Endorsements anyone can read.** `endorse` (wallet and passkey) and `disavow` (wallet alone: always safe) write one account per coin mint, on any launchpad. It lives at `["endorse", passport, mint]`, so any wallet, explorer or launchpad can check whether the verified artist stands behind a coin.
+6. **Endorsements anyone can read.** `endorse` (wallet and passkey) and `disavow` (wallet alone: always safe) write one account per coin mint, on any launchpad. It lives at `["endorse", passport, mint]`, so any wallet, explorer or launchpad can check whether the verified artist stands behind a coin. An endorsement (or disavowal) counts only while the passport isn't revoked and if its `updated_at` is at or after the passport's `issued_at`: a reissue voids whatever the previous holder wrote. Apps may also flag passports younger than a week as new.
 
 ## Accounts
 
