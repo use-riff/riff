@@ -301,6 +301,9 @@ pub fn handle_endorse(
     passkey_proof: PasskeyProof,
 ) -> Result<()> {
     let accounts = &mut ctx.accounts;
+    accounts
+        .passport
+        .require_settled(&accounts.config, Clock::get()?.unix_timestamp)?;
     require_passkey(
         &mut accounts.passport,
         &accounts.config,

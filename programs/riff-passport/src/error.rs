@@ -50,4 +50,8 @@ pub enum PassportError {
     ZeroAmount,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("The passport is new: endorsing and withdrawing unlock after its waiting period")]
+    OnProbation,
+    #[msg("Only a revoked passport can be reissued")]
+    NotRevoked,
 }

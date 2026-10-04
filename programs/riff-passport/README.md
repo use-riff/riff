@@ -62,7 +62,18 @@ A public, hack-resistant identity for musicians on Solana.
    `withdraw_artist_fees` are called with the vault signing through its seeds.
    A lost wallet never loses the artist's money.
 
-5. **Endorsements anyone can read.** `endorse` (wallet and passkey) and `disavow` (wallet alone: always safe) write one account per coin mint, on any launchpad. It lives at `["endorse", passport, mint]`, so any wallet, explorer or launchpad can check whether the verified artist stands behind a coin.
+5. **Probation for new passports.** A passport made from a hacked inbox
+   would pass the proofs: most artists get their Spotify, distributor and
+   Apple emails in one inbox. So a new passport waits out the same period as
+   a recovery (72 hours on mainnet) before it can `endorse` or `withdraw`.
+   It can still `disavow` and `claim_coin` (claiming only moves money into
+   the vault). If it was a takeover, riff revokes it in that window, and
+   `reissue_passport` gives it to the real artist: riff's admin (a multisig
+   with a time-lock on mainnet) and the artist's wallet sign, with fresh
+   proofs and a new passkey. The vault stays, so what was claimed is the
+   artist's, and the reissued passport starts a new probation.
+
+6. **Endorsements anyone can read.** `endorse` (wallet and passkey) and `disavow` (wallet alone: always safe) write one account per coin mint, on any launchpad. It lives at `["endorse", passport, mint]`, so any wallet, explorer or launchpad can check whether the verified artist stands behind a coin. An endorsement (or disavowal) counts only while the passport isn't revoked and if its `updated_at` is at or after the passport's `issued_at`: a reissue voids whatever the previous holder wrote. Apps may also flag passports younger than a week as new.
 
 ## Accounts
 
@@ -81,15 +92,17 @@ A public, hack-resistant identity for musicians on Solana.
 | `initialize_config`, `update_config` | the program's upgrade authority, then the admin |
 | `record_proof` | the wallet plus riff's verifier |
 | `issue_passport` | the wallet, with 2 or more fresh proofs and a passkey signature |
-| `add_proofs`, `set_wallet`, `set_passkey`, `endorse` | the wallet plus the passkey |
+| `add_proofs`, `set_wallet`, `set_passkey` | the wallet plus the passkey |
+| `endorse` | the wallet plus the passkey, after the probation |
 | `disavow` | the wallet |
 | `request_recovery` | a new wallet, with fresh proofs and a new passkey |
 | `veto_recovery` | the passkey, or a guardian proof |
 | `finalize_recovery` | anyone, after the time-lock |
 | `claim_coin` | the wallet plus riff's verifier (as riff requires) |
 | `collect_fees` | anyone; the money can only go to the vault |
-| `withdraw` | the wallet up to the daily amount; the passkey for more |
+| `withdraw` | after the probation: the wallet up to the daily amount; the passkey for more |
 | `revoke_passport` | the admin, publicly logged |
+| `reissue_passport` | the admin plus the artist's wallet, with fresh proofs and a new passkey; only for a revoked passport |
 
 ## Limits
 
@@ -107,6 +120,13 @@ A public, hack-resistant identity for musicians on Solana.
 - Anyone with a copy of a Spotify for Artists email (the artist's team, or
   someone it was forwarded to) could use it. That's why a passport needs a
   second source and a passkey.
+- Someone who controls the artist's inbox can usually pass every email
+  proof, and reset the Spotify login to set the bio code. The two-source
+  rule doesn't stop that. The probation does: the passport can't vouch for a
+  coin or pay out until its waiting period ends, riff's verifier reviews
+  claims on new passports and large claims before co-signing them, and riff
+  can revoke and reissue. An artist who already has a passport is protected
+  by their passkey and the recovery time-lock.
 
 ## Tests
 
