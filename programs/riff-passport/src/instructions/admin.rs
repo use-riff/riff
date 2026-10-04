@@ -3,9 +3,11 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::*,
     error::PassportError,
-    events::PassportRevoked,
+    events::{PassportReissued, PassportRevoked},
+    instructions::shared::{fresh_proofs, kinds},
+    passkey::{self, PasskeyAction, PasskeyProof},
     program::RiffPassport,
-    state::{Passport, PassportConfig},
+    state::{proofs_suffice, Passkey, Passport, PassportConfig, ProofSummary},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -89,6 +91,88 @@ pub fn handle_revoke_passport(ctx: Context<RevokePassport>, reason: String) -> R
     emit!(PassportRevoked {
         passport: ctx.accounts.passport.key(),
         reason
+    });
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct ReissuePassport<'info> {
+    pub admin: Signer<'info>,
+    /// The artist's new wallet, with fresh proofs of its own.
+    pub wallet: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = admin @ PassportError::NotAdmin)]
+    pub config: Account<'info, PassportConfig>,
+    #[account(
+        mut,
+        seeds = [PASSPORT_SEED, passport.artist_id.as_bytes()],
+        bump = passport.bump,
+        constraint = passport.revoked @ PassportError::NotRevoked,
+    )]
+    pub passport: Account<'info, Passport>,
+    /// CHECK: the instructions sysvar, for the passkey signature.
+    #[account(address = solana_instructions_sysvar::ID)]
+    pub instructions: UncheckedAccount<'info>,
+    // remaining_accounts: the new wallet's proof records for this artist.
+}
+
+/// Gives a revoked passport to the real artist, for when someone else got it
+/// first (for example from a hacked inbox). Needs riff's admin (a multisig
+/// with a time-lock on mainnet) and the artist: enough fresh proofs from
+/// their wallet, and a new passkey. The vault stays, so what was claimed
+/// into it is the artist's; the passport starts a new probation.
+pub fn handle_reissue_passport<'info>(
+    ctx: Context<'info, ReissuePassport<'info>>,
+    passkey: Passkey,
+    passkey_proof: PasskeyProof,
+) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let config = &ctx.accounts.config;
+    let wallet = ctx.accounts.wallet.key();
+    let passport = &mut ctx.accounts.passport;
+    let records = fresh_proofs(
+        ctx.remaining_accounts,
+        &passport.artist_id.clone(),
+        &wallet,
+        now,
+        config.proof_max_age,
+    )?;
+    require!(
+        proofs_suffice(&kinds(&records)),
+        PassportError::NotEnoughProofs
+    );
+
+    // The nonce has moved on since the first registration, so an old
+    // registration signature can't be replayed here.
+    let expected = passkey::challenge(
+        &passport.key(),
+        passport.nonce,
+        &PasskeyAction::Register { passkey },
+    )?;
+    passkey::verify(
+        &ctx.accounts.instructions,
+        &passkey,
+        &config.rp_id_hash,
+        &expected,
+        &passkey_proof,
+    )?;
+
+    passport.wallet = wallet;
+    passport.passkey = passkey;
+    passport.proofs = records.iter().map(|(_, r)| ProofSummary::from(r)).collect();
+    passport.nonce = passport
+        .nonce
+        .checked_add(1)
+        .ok_or(error!(PassportError::MathOverflow))?;
+    passport.recovery = None;
+    passport.revoked = false;
+    passport.issued_at = now;
+    passport.withdraw_window_start = now;
+    passport.withdrawn_in_window = 0;
+
+    emit!(PassportReissued {
+        passport: passport.key(),
+        wallet,
+        proofs: kinds(&records)
     });
     Ok(())
 }

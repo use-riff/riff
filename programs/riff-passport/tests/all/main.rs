@@ -7,4 +7,5 @@
 mod common;
 
 mod test_identity;
+mod test_takeover;
 mod test_vault_recovery;

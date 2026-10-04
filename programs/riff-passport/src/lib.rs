@@ -41,6 +41,14 @@ pub mod riff_passport {
         admin::handle_revoke_passport(ctx, reason)
     }
 
+    pub fn reissue_passport<'info>(
+        ctx: Context<'info, ReissuePassport<'info>>,
+        passkey: Passkey,
+        passkey_proof: PasskeyProof,
+    ) -> Result<()> {
+        admin::handle_reissue_passport(ctx, passkey, passkey_proof)
+    }
+
     pub fn record_proof(
         ctx: Context<RecordProof>,
         artist_id: String,

@@ -13,6 +13,8 @@ pub struct PassportConfig {
     /// sha256 of the passkey site (the WebAuthn relying party, e.g. "riffpad.fun").
     pub rp_id_hash: [u8; 32],
     /// How long a recovery waits before it can be finalized, in seconds.
+    /// A new or reissued passport waits as long before it can endorse or
+    /// withdraw (its probation), so a takeover has the same public window.
     pub recovery_delay: i64,
     /// How much may leave a vault per day without the passkey, in lamports.
     pub free_withdraw_per_day: u64,
@@ -157,6 +159,19 @@ pub struct Passport {
 }
 
 impl Passport {
+    /// Refuses while the passport is on probation: newly issued or reissued,
+    /// and its waiting period hasn't passed. Gives the real artist and riff
+    /// time to notice a passport made from a hacked inbox before it can
+    /// vouch for a coin or move money.
+    pub fn require_settled(&self, config: &PassportConfig, now: i64) -> Result<()> {
+        let settled_at = self
+            .issued_at
+            .checked_add(config.recovery_delay)
+            .ok_or(error!(crate::error::PassportError::MathOverflow))?;
+        require!(now >= settled_at, crate::error::PassportError::OnProbation);
+        Ok(())
+    }
+
     pub fn has_kind(&self, kind: ProofKind) -> bool {
         self.proofs.iter().any(|p| p.kind == kind)
     }

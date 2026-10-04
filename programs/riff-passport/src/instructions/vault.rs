@@ -133,6 +133,7 @@ pub fn handle_withdraw(
     require!(amount > 0, PassportError::ZeroAmount);
     let now = Clock::get()?.unix_timestamp;
     let accounts = &mut ctx.accounts;
+    accounts.passport.require_settled(&accounts.config, now)?;
     let vault_info = accounts.vault.to_account_info();
     let keep = Rent::get()?.minimum_balance(vault_info.data_len());
     let available = vault_info.lamports().saturating_sub(keep);

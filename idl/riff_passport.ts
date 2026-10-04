@@ -760,6 +760,102 @@ export type RiffPassport = {
       ]
     },
     {
+      "name": "reissuePassport",
+      "discriminator": [
+        13,
+        96,
+        11,
+        176,
+        32,
+        237,
+        208,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "wallet",
+          "docs": [
+            "The artist's new wallet, with fresh proofs of its own."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "passport",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115,
+                  112,
+                  111,
+                  114,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport.artistId",
+                "account": "passport"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "passkey",
+          "type": {
+            "array": [
+              "u8",
+              33
+            ]
+          }
+        },
+        {
+          "name": "passkeyProof",
+          "type": {
+            "defined": {
+              "name": "passkeyProof"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "requestRecovery",
       "discriminator": [
         169,
@@ -1458,6 +1554,19 @@ export type RiffPassport = {
       ]
     },
     {
+      "name": "passportReissued",
+      "discriminator": [
+        125,
+        129,
+        30,
+        69,
+        84,
+        6,
+        20,
+        136
+      ]
+    },
+    {
       "name": "passportRevoked",
       "discriminator": [
         204,
@@ -1682,6 +1791,16 @@ export type RiffPassport = {
       "code": 6023,
       "name": "mathOverflow",
       "msg": "Math overflow"
+    },
+    {
+      "code": 6024,
+      "name": "onProbation",
+      "msg": "The passport is new: endorsing and withdrawing unlock after its waiting period"
+    },
+    {
+      "code": 6025,
+      "name": "notRevoked",
+      "msg": "Only a revoked passport can be reissued"
     }
   ],
   "types": [
@@ -1918,7 +2037,9 @@ export type RiffPassport = {
           {
             "name": "recoveryDelay",
             "docs": [
-              "How long a recovery waits before it can be finalized, in seconds."
+              "How long a recovery waits before it can be finalized, in seconds.",
+              "A new or reissued passport waits as long before it can endorse or",
+              "withdraw (its probation), so a takeover has the same public window."
             ],
             "type": "i64"
           },
@@ -1988,6 +2109,32 @@ export type RiffPassport = {
           {
             "name": "artistId",
             "type": "string"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "proofs",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "proofKind"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "passportReissued",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "passport",
+            "type": "pubkey"
           },
           {
             "name": "wallet",

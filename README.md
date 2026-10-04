@@ -17,7 +17,7 @@ off-chain services live elsewhere.
 - **Two Anchor programs:** `riff` (coins, curve, fees, artist claim,
   graduation into Raydium) and `riff-passport` (verified artist identity with
   passkey 2FA and time-locked recovery).
-- **~3,500 lines of program code**, 30 instructions, **130 tests** on LiteSVM
+- **~3,600 lines of program code**, 31 instructions, **134 tests** on LiteSVM
   against the real mainnet SPL Token, Token-2022 and Raydium programs.
 - **Security:** internal review with four findings fixed (H-01, M-01, M-02,
   L-01), each with regression tests; CI with clippy, `cargo audit` and
@@ -77,7 +77,10 @@ an on-chain identity. A passport needs at least two independent proofs, one
 of them strong: an email from Spotify for Artists with Spotify's signature,
 or a code in the artist's Spotify bio. After that, a passkey is required for
 every sensitive action, checked by Solana's secp256r1 precompile. Recovery
-has a public time-lock that the artist's other proofs can veto. The artist's
+has a public time-lock that the artist's other proofs can veto, and a new
+passport waits out the same period before it can endorse or withdraw, so a
+passport made from a hacked inbox can be revoked and reissued to the real
+artist before it does harm. The artist's
 riff earnings sit in a passport vault that riff's own claim and withdraw
 instructions pay into. Any app can read which coins the artist endorses.
 

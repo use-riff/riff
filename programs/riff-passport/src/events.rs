@@ -69,6 +69,13 @@ pub struct PassportRevoked {
 }
 
 #[event]
+pub struct PassportReissued {
+    pub passport: Pubkey,
+    pub wallet: Pubkey,
+    pub proofs: Vec<ProofKind>,
+}
+
+#[event]
 pub struct CoinClaimed {
     pub passport: Pubkey,
     pub mint: Pubkey,

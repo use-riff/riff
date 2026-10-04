@@ -342,12 +342,58 @@ pub fn issue(
 
 pub const DEFAULT_KINDS: [ProofKind; 2] = [ProofKind::SpotifyProfileCode, ProofKind::YouTube];
 
-/// A passport issued to a fresh wallet with a fresh passkey.
+/// A passport issued to a fresh wallet with a fresh passkey, past its
+/// probation (so it can endorse and withdraw).
 pub fn issued(env: &mut Env) -> (Keypair, TestPasskey) {
     let wallet = funded_keypair(env.svm());
     let passkey = TestPasskey::new();
     issue(env, &wallet, &passkey, &DEFAULT_KINDS).unwrap();
+    advance_time(env.svm(), RECOVERY_DELAY);
     (wallet, passkey)
+}
+
+/// riff's admin revokes the passport.
+pub fn revoke(env: &mut Env) {
+    let admin = env.riff.admin.insecure_clone();
+    let ix = ix(
+        riff_passport::instruction::RevokePassport {
+            reason: "taken over".into(),
+        },
+        riff_passport::accounts::RevokePassport {
+            admin: admin.pubkey(),
+            config: config_address(),
+            passport: passport_address(ARTIST_ID),
+        },
+    );
+    send(env.svm(), ix, &[&admin]).unwrap();
+}
+
+pub fn reissue_ix(
+    admin: &Pubkey,
+    wallet: &Pubkey,
+    passkey: [u8; 33],
+    proof: PasskeyProof,
+    records: &[Pubkey],
+) -> Instruction {
+    let mut ix = ix(
+        riff_passport::instruction::ReissuePassport {
+            passkey,
+            passkey_proof: proof,
+        },
+        riff_passport::accounts::ReissuePassport {
+            admin: *admin,
+            wallet: *wallet,
+            config: config_address(),
+            passport: passport_address(ARTIST_ID),
+            instructions: instructions_sysvar(),
+        },
+    );
+    ix.accounts.extend(
+        records.iter().map(|r| {
+            anchor_lang::solana_program::instruction::AccountMeta::new_readonly(*r, false)
+        }),
+    );
+    ix
 }
 
 pub fn act_accounts(wallet: &Pubkey) -> riff_passport::accounts::PasskeyAct {
