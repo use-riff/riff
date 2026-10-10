@@ -41,6 +41,13 @@ pub mod riff_passport {
         admin::handle_revoke_passport(ctx, reason)
     }
 
+    /// Devnet only (absent from the mainnet build): closes a passport and its
+    /// vault so a demo or test can issue it again.
+    #[cfg(feature = "devnet")]
+    pub fn reset_passport(ctx: Context<ResetPassport>) -> Result<()> {
+        devnet::handle_reset_passport(ctx)
+    }
+
     pub fn reissue_passport<'info>(
         ctx: Context<'info, ReissuePassport<'info>>,
         passkey: Passkey,
