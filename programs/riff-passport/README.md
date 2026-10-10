@@ -103,6 +103,7 @@ A public, hack-resistant identity for musicians on Solana.
 | `withdraw` | after the probation: the wallet up to the daily amount; the passkey for more |
 | `revoke_passport` | the admin, publicly logged |
 | `reissue_passport` | the admin plus the artist's wallet, with fresh proofs and a new passkey; only for a revoked passport |
+| `reset_passport` | **devnet build only** (`--features devnet`): the admin closes a passport and its vault so a demo can issue it again; absent from the mainnet build |
 
 ## Limits
 
