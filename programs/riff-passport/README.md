@@ -52,9 +52,9 @@ A public, hack-resistant identity for musicians on Solana.
    - the user was verified.
 
 3. **Recovery with a time-lock and a veto.** If the artist loses a wallet or a passkey:
-   - A new wallet with fresh proofs (again two sources, one strong) and a new passkey can request a recovery.
+   - A new wallet with fresh proofs (again two sources, one strong) and a new passkey can request a recovery. It must be a different wallet from the passport's, and its proofs must be newer than the passport's current wallet, so a stolen wallet can't reuse its old proofs.
    - The recovery waits out a public time-lock (72 hours on mainnet).
-   - During the time-lock, the old passkey or any *guardian* can veto it. A guardian is a fresh proof of a kind already on the passport, such as the artist's YouTube. A stolen wallet alone can do nothing.
+   - During the time-lock, the old passkey or any *guardian* can veto it. A guardian is a fresh proof of the same source as one already on the passport, such as the artist's YouTube channel (any code in the artist's Spotify bio counts, since only the artist can edit it). A stolen wallet alone can do nothing.
 
 4. **Earnings belong to the passport.** `claim_coin` claims a riff coin with
    the passport's vault as the coin's artist. The vault is a program account

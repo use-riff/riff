@@ -166,6 +166,7 @@ pub fn handle_reissue_passport<'info>(
     passport.recovery = None;
     passport.revoked = false;
     passport.issued_at = now;
+    passport.wallet_since = now;
     passport.withdraw_window_start = now;
     passport.withdrawn_in_window = 0;
 

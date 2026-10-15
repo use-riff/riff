@@ -54,4 +54,6 @@ pub enum PassportError {
     OnProbation,
     #[msg("Only a revoked passport can be reissued")]
     NotRevoked,
+    #[msg("Recovery must move the passport to a new wallet")]
+    SameWallet,
 }

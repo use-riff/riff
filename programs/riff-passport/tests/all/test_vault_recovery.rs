@@ -131,6 +131,17 @@ fn request_recovery(
     for kind in kinds {
         record_proof(env, new_wallet, *kind).unwrap();
     }
+    request_with_records(env, new_wallet, new_passkey, kinds)
+}
+
+/// Requests a recovery with the proof records `new_wallet` already has.
+#[allow(clippy::result_large_err)]
+fn request_with_records(
+    env: &mut Env,
+    new_wallet: &Keypair,
+    new_passkey: &TestPasskey,
+    kinds: &[ProofKind],
+) -> litesvm::types::TransactionResult {
     let passport = passport_address(ARTIST_ID);
     let (proof, pre) = new_passkey.approve(
         &passport,
@@ -302,6 +313,78 @@ fn the_artist_vetoes_with_their_passkey_or_a_guardian_proof() {
         ),
         E::NotAGuardian,
     );
+}
+
+#[test]
+fn a_stolen_wallet_cant_recover_the_passport_to_itself() {
+    let mut env = setup();
+    let (wallet, _passkey) = issued(&mut env);
+    // Its issuance proofs are still fresh, but the wallet alone isn't enough
+    // to swap in the thief's passkey.
+    let res = request_with_records(&mut env, &wallet, &TestPasskey::new(), &DEFAULT_KINDS);
+    assert_error(res, E::SameWallet);
+}
+
+#[test]
+fn a_wallet_the_artist_moved_away_from_cant_replay_its_old_proofs() {
+    let mut env = setup();
+    let (stolen, _lost_passkey) = issued(&mut env);
+    let new_wallet = funded_keypair(env.svm());
+    request_recovery(&mut env, &new_wallet, &TestPasskey::new(), &DEFAULT_KINDS).unwrap();
+    advance_time(env.svm(), RECOVERY_DELAY);
+    let anyone = funded_keypair(env.svm());
+    send(env.svm(), finalize_ix(), &[&anyone]).unwrap();
+
+    // Six days after issuance, the stolen wallet's records are still within
+    // the proof age, but they predate the wallet the artist moved to.
+    let res = request_with_records(&mut env, &stolen, &TestPasskey::new(), &DEFAULT_KINDS);
+    assert_error(res, E::ProofExpired);
+}
+
+#[test]
+fn a_guardian_must_prove_the_passports_own_source() {
+    let mut env = setup();
+    issued(&mut env);
+    let attacker = funded_keypair(env.svm());
+    request_recovery(&mut env, &attacker, &TestPasskey::new(), &DEFAULT_KINDS).unwrap();
+    advance_time(env.svm(), 10);
+
+    // A YouTube proof of some other channel can't veto.
+    let stranger = funded_keypair(env.svm());
+    let verifier = env.verifier();
+    let mut other_channel =
+        record_proof_ix(&env, &stranger.pubkey(), ARTIST_ID, ProofKind::YouTube);
+    let len = other_channel.data.len();
+    other_channel.data[len - 32..].copy_from_slice(&[0xee; 32]); // source_hash is the last argument
+    send(env.svm(), other_channel, &[&stranger, &verifier]).unwrap();
+    let guardian = proof_address(ARTIST_ID, &stranger.pubkey(), ProofKind::YouTube);
+    assert_error(
+        send(
+            env.svm(),
+            veto_ix(&stranger.pubkey(), None, Some(guardian)),
+            &[&stranger],
+        ),
+        E::NotAGuardian,
+    );
+
+    // A bio code is tied to its wallet, so its source differs; it still vetoes.
+    let phone = funded_keypair(env.svm());
+    let mut bio_code = record_proof_ix(
+        &env,
+        &phone.pubkey(),
+        ARTIST_ID,
+        ProofKind::SpotifyProfileCode,
+    );
+    let len = bio_code.data.len();
+    bio_code.data[len - 32..].copy_from_slice(&[0xbb; 32]);
+    send(env.svm(), bio_code, &[&phone, &verifier]).unwrap();
+    let guardian = proof_address(ARTIST_ID, &phone.pubkey(), ProofKind::SpotifyProfileCode);
+    send(
+        env.svm(),
+        veto_ix(&phone.pubkey(), None, Some(guardian)),
+        &[&phone],
+    )
+    .unwrap();
 }
 
 #[test]

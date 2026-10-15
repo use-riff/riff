@@ -1801,6 +1801,11 @@ export type RiffPassport = {
       "code": 6025,
       "name": "notRevoked",
       "msg": "Only a revoked passport can be reissued"
+    },
+    {
+      "code": 6026,
+      "name": "sameWallet",
+      "msg": "Recovery must move the passport to a new wallet"
     }
   ],
   "types": [
@@ -1983,6 +1988,14 @@ export type RiffPassport = {
           },
           {
             "name": "issuedAt",
+            "type": "i64"
+          },
+          {
+            "name": "walletSince",
+            "docs": [
+              "When the current wallet took over; its proof records from before then",
+              "can't start a recovery."
+            ],
             "type": "i64"
           },
           {
