@@ -152,6 +152,9 @@ pub struct Passport {
     pub recovery: Option<Recovery>,
     pub revoked: bool,
     pub issued_at: i64,
+    /// When the current wallet took over; its proof records from before then
+    /// can't start a recovery.
+    pub wallet_since: i64,
     pub withdraw_window_start: i64,
     pub withdrawn_in_window: u64,
     pub bump: u8,
@@ -170,10 +173,6 @@ impl Passport {
             .ok_or(error!(crate::error::PassportError::MathOverflow))?;
         require!(now >= settled_at, crate::error::PassportError::OnProbation);
         Ok(())
-    }
-
-    pub fn has_kind(&self, kind: ProofKind) -> bool {
-        self.proofs.iter().any(|p| p.kind == kind)
     }
 
     /// Adds or refreshes a proof.

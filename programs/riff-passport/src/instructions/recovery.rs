@@ -6,7 +6,7 @@ use crate::{
     events::{RecoveryFinalized, RecoveryRequested, RecoveryVetoed},
     instructions::shared::{fresh_proofs, kinds},
     passkey::{self, PasskeyAction, PasskeyProof},
-    state::{proofs_suffice, Passkey, Passport, PassportConfig, ProofRecord, Recovery},
+    state::{proofs_suffice, Passkey, Passport, PassportConfig, ProofKind, ProofRecord, Recovery},
 };
 
 #[derive(Accounts)]
@@ -39,6 +39,8 @@ pub fn handle_request_recovery<'info>(
     let new_wallet = ctx.accounts.new_wallet.key();
     let passport = &mut ctx.accounts.passport;
     require!(passport.recovery.is_none(), PassportError::RecoveryPending);
+    // The current wallet alone must not be enough to replace the passkey.
+    require!(new_wallet != passport.wallet, PassportError::SameWallet);
     let records = fresh_proofs(
         ctx.remaining_accounts,
         &passport.artist_id.clone(),
@@ -46,6 +48,14 @@ pub fn handle_request_recovery<'info>(
         now,
         config.proof_max_age,
     )?;
+    // Records from before the current wallet took over could belong to a
+    // wallet the artist already moved away from, maybe a stolen one.
+    require!(
+        records
+            .iter()
+            .all(|(_, r)| r.verified_at > passport.wallet_since),
+        PassportError::ProofExpired
+    );
     require!(
         proofs_suffice(&kinds(&records)),
         PassportError::NotEnoughProofs
@@ -138,7 +148,7 @@ pub fn handle_veto_recovery<'info>(
                 record.artist_id == passport.artist_id
                     && record.wallet == ctx.accounts.vetoer.key()
                     && record.verified_at >= recovery.requested_at
-                    && passport.has_kind(record.kind),
+                    && is_guardian(passport, &record),
                 PassportError::NotAGuardian
             );
             by_proof = Some(record.kind);
@@ -155,6 +165,17 @@ pub fn handle_veto_recovery<'info>(
         by_proof
     });
     Ok(())
+}
+
+/// A guardian proves the same source the passport was built on (the same
+/// channel, domain or email), not just any proof of that kind. A bio code
+/// is tied to its wallet, so it can't match; it counts on its own, since
+/// only the artist can edit the Spotify bio.
+fn is_guardian(passport: &Passport, record: &ProofRecord) -> bool {
+    passport.proofs.iter().any(|p| {
+        p.kind == record.kind
+            && (record.kind == ProofKind::SpotifyProfileCode || p.source_hash == record.source_hash)
+    })
 }
 
 #[derive(Accounts)]
@@ -175,6 +196,7 @@ pub fn handle_finalize_recovery(ctx: Context<FinalizeRecovery>) -> Result<()> {
     let recovery = passport.recovery.ok_or(error!(PassportError::NoRecovery))?;
     require!(now >= recovery.effective_at, PassportError::RecoveryLocked);
     passport.wallet = recovery.new_wallet;
+    passport.wallet_since = now;
     passport.passkey = recovery.new_passkey;
     passport.recovery = None;
     passport.withdraw_window_start = now;

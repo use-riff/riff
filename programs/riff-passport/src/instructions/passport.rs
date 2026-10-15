@@ -85,6 +85,7 @@ pub fn handle_issue_passport<'info>(
     passport.recovery = None;
     passport.revoked = false;
     passport.issued_at = now;
+    passport.wallet_since = now;
     passport.withdraw_window_start = now;
     passport.withdrawn_in_window = 0;
     passport.bump = ctx.bumps.passport;
@@ -198,6 +199,7 @@ pub fn handle_set_wallet(ctx: Context<SetWallet>, passkey_proof: PasskeyProof) -
     )?;
     let old_wallet = act.passport.wallet;
     act.passport.wallet = new_wallet;
+    act.passport.wallet_since = Clock::get()?.unix_timestamp;
     emit!(WalletChanged {
         passport: act.passport.key(),
         old_wallet,
