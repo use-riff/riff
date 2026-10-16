@@ -6,6 +6,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+#[cfg(feature = "devnet")]
+mod test_devnet_reset;
 mod test_identity;
 mod test_takeover;
 mod test_vault_recovery;
