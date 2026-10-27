@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
-use crate::{error::RiffDbcError, program::RiffDbc, *};
+use crate::{error::RiffDbcError, instructions::update_config, program::RiffDbc, *};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -39,10 +39,7 @@ pub struct Initialize<'info> {
 }
 
 pub fn handle_initialize(ctx: Context<Initialize>, params: ConfigParams) -> Result<()> {
-    require!(
-        params.launcher_share_bps as u64 <= BPS,
-        RiffDbcError::InvalidShare
-    );
+    update_config::validate(params.launcher_share_bps, params.claim_window_secs)?;
     ctx.accounts.config.set_inner(Config {
         admin: ctx.accounts.admin.key(),
         verifier: params.verifier,
@@ -50,6 +47,7 @@ pub fn handle_initialize(ctx: Context<Initialize>, params: ConfigParams) -> Resu
         treasury: params.treasury,
         dbc_config: params.dbc_config,
         launcher_share_bps: params.launcher_share_bps,
+        max_launch_buy: params.max_launch_buy,
         claim_window_secs: params.claim_window_secs,
         bump: ctx.bumps.config,
         fee_authority_bump: ctx.bumps.fee_authority,

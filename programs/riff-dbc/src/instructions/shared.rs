@@ -1,6 +1,6 @@
 //! Accounts and calls shared by the instructions that touch a coin's pool.
-use anchor_lang::prelude::*;
-use anchor_spl::token::{self, TokenAccount, Transfer};
+use anchor_lang::{prelude::*, system_program};
+use anchor_spl::token::{self, CloseAccount, TokenAccount, Transfer};
 
 use crate::{dynamic_bonding_curve, *};
 
@@ -9,7 +9,7 @@ pub fn escrow_seeds<'a>(mint: &'a Pubkey, bump: &'a [u8; 1]) -> [&'a [u8]; 3] {
 }
 
 /// Moves the creator share Meteora holds for this pool into the coin's
-/// artist vault, while riff's escrow is still the pool creator. Returns the
+/// artist vault. riff's escrow is the pool creator for good. Returns the
 /// amount collected.
 #[allow(clippy::too_many_arguments)]
 pub fn collect_creator_fees<'info>(
@@ -56,7 +56,7 @@ pub fn collect_creator_fees<'info>(
     Ok(artist_vault.amount - before)
 }
 
-/// Pays out the artist vault's whole balance.
+/// Pays out the artist vault's whole balance, as WSOL.
 pub fn empty_artist_vault<'info>(
     token_program: &AccountInfo<'info>,
     artist_vault: &Account<'info, TokenAccount>,
@@ -80,4 +80,81 @@ pub fn empty_artist_vault<'info>(
         )?;
     }
     Ok(amount)
+}
+
+/// Pays out the artist vault's whole balance as SOL to the artist's passport
+/// vault. WSOL only unwraps by closing an account, so the balance goes
+/// through `unwrap`, a WSOL account the payer created for this instruction:
+/// closing it returns its rent and the balance to the payer, who passes the
+/// balance on.
+#[allow(clippy::too_many_arguments)]
+pub fn pay_artist_sol<'info>(
+    token_program: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    artist_vault: &Account<'info, TokenAccount>,
+    unwrap: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    passport_vault: &AccountInfo<'info>,
+    escrow: &AccountInfo<'info>,
+    escrow_signer: &[&[u8]],
+) -> Result<u64> {
+    let amount = empty_artist_vault(token_program, artist_vault, unwrap, escrow, escrow_signer)?;
+    token::close_account(CpiContext::new_with_signer(
+        token_program.key(),
+        CloseAccount {
+            account: unwrap.clone(),
+            destination: payer.clone(),
+            authority: escrow.clone(),
+        },
+        &[escrow_signer],
+    ))?;
+    if amount > 0 {
+        system_program::transfer(
+            CpiContext::new(
+                system_program.key(),
+                system_program::Transfer {
+                    from: payer.clone(),
+                    to: passport_vault.clone(),
+                },
+            ),
+            amount,
+        )?;
+    }
+    Ok(amount)
+}
+
+/// Splits a partner share that just arrived in the fees vault between the
+/// coin's launcher and riff's treasury. Returns the launcher's part.
+#[allow(clippy::too_many_arguments)]
+pub fn split_partner_share<'info>(
+    token_program: &AccountInfo<'info>,
+    fees_vault: &Account<'info, TokenAccount>,
+    launcher_account: &AccountInfo<'info>,
+    treasury_account: &AccountInfo<'info>,
+    fee_authority: &AccountInfo<'info>,
+    fee_signer: &[&[u8]],
+    launcher_share_bps: u16,
+    amount: u64,
+) -> Result<u64> {
+    let to_launcher = (amount as u128 * launcher_share_bps as u128 / BPS as u128) as u64;
+    for (to, part) in [
+        (launcher_account, to_launcher),
+        (treasury_account, amount - to_launcher),
+    ] {
+        if part > 0 {
+            token::transfer(
+                CpiContext::new_with_signer(
+                    token_program.key(),
+                    Transfer {
+                        from: fees_vault.to_account_info(),
+                        to: to.clone(),
+                        authority: fee_authority.clone(),
+                    },
+                    &[fee_signer],
+                ),
+                part,
+            )?;
+        }
+    }
+    Ok(to_launcher)
 }

@@ -5,7 +5,14 @@ use anchor_spl::{
     token_2022::Token2022,
 };
 
-use crate::{dynamic_bonding_curve, error::RiffDbcError, *};
+use anchor_lang::Discriminator;
+use solana_instructions_sysvar::load_instruction_at_checked;
+
+use crate::{
+    dynamic_bonding_curve::{self, client::args::Swap as SwapIx},
+    error::RiffDbcError,
+    *,
+};
 
 #[derive(Accounts)]
 pub struct CreateCoin<'info> {
@@ -60,6 +67,9 @@ pub struct CreateCoin<'info> {
     pub quote_vault: UncheckedAccount<'info>,
     /// CHECK: checked by Meteora.
     pub dbc_event_authority: UncheckedAccount<'info>,
+    /// CHECK: read to cap the launch buy (see `check_launch_buy`).
+    #[account(address = solana_instructions_sysvar::ID)]
+    pub instructions_sysvar: UncheckedAccount<'info>,
     pub dbc_program: Program<'info, dynamic_bonding_curve::program::DynamicBondingCurve>,
     pub token_quote_program: Program<'info, Token>,
     pub token_program: Program<'info, Token2022>,
@@ -128,6 +138,12 @@ pub fn handle_create_coin<'info>(
         },
     ))?;
 
+    check_launch_buy(
+        &a.instructions_sysvar,
+        &a.pool.key(),
+        a.config.max_launch_buy,
+    )?;
+
     let now = Clock::get()?.unix_timestamp;
     let claim_window = a.config.claim_window_secs;
     let pool = a.pool.key();
@@ -146,5 +162,35 @@ pub fn handle_create_coin<'info>(
         bump: ctx.bumps.coin,
         escrow_bump: ctx.bumps.escrow,
     });
+    Ok(())
+}
+
+/// The launcher's first buy goes in the transaction that creates the coin,
+/// as Meteora `swap` instructions after this one: Meteora charges a buy in
+/// the pool's creating transaction the normal fee, not the launch's
+/// anti-sniping fee. So that buy is capped, in SOL, here. Buys nested in
+/// other programs' instructions don't get the normal fee.
+fn check_launch_buy(sysvar: &AccountInfo, pool: &Pubkey, cap: u64) -> Result<()> {
+    let mut total: u64 = 0;
+    let mut index = 0;
+    while let Ok(ix) = load_instruction_at_checked(index, sysvar) {
+        index += 1;
+        // Every Meteora swap names the pool third.
+        if ix.program_id != dynamic_bonding_curve::ID
+            || ix.accounts.get(2).map(|a| a.pubkey) != Some(*pool)
+        {
+            continue;
+        }
+        // Only exact-in swaps, so the amount is what the launcher pays.
+        require!(
+            ix.data.len() >= 16 && ix.data[..8] == *SwapIx::DISCRIMINATOR,
+            RiffDbcError::LaunchBuyNotSwap
+        );
+        let amount_in = u64::from_le_bytes(ix.data[8..16].try_into().unwrap());
+        total = total
+            .checked_add(amount_in)
+            .ok_or(error!(RiffDbcError::MathOverflow))?;
+    }
+    require!(total <= cap, RiffDbcError::LaunchBuyTooLarge);
     Ok(())
 }

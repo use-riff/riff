@@ -14,6 +14,8 @@ pub struct Config {
     pub dbc_config: Pubkey,
     /// Of the partner share, the part for whoever launched the coin (in bps).
     pub launcher_share_bps: u16,
+    /// The most SOL (in lamports) the launcher's launch buy may spend.
+    pub max_launch_buy: u64,
     pub claim_window_secs: i64,
     pub bump: u8,
     pub fee_authority_bump: u8,
@@ -30,7 +32,8 @@ pub struct Coin {
     pub artist_id: String,
     #[max_len(64)]
     pub artist_name: String,
-    /// Set once the artist verifies and claims.
+    /// The artist's passport vault, set once they claim. Their share is paid
+    /// there.
     pub artist: Option<Pubkey>,
     pub created_at: i64,
     pub claim_deadline: i64,
@@ -48,6 +51,20 @@ pub struct ConfigParams {
     pub treasury: Pubkey,
     pub dbc_config: Pubkey,
     pub launcher_share_bps: u16,
+    pub max_launch_buy: u64,
+    pub claim_window_secs: i64,
+}
+
+/// Everything but the Meteora config, which every existing coin depends on.
+/// A new claim window applies to coins created after the change.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct ConfigUpdate {
+    pub admin: Pubkey,
+    pub verifier: Pubkey,
+    pub charity: Pubkey,
+    pub treasury: Pubkey,
+    pub launcher_share_bps: u16,
+    pub max_launch_buy: u64,
     pub claim_window_secs: i64,
 }
 

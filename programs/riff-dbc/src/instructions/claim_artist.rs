@@ -3,34 +3,64 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
     token_2022::Token2022,
 };
+use riff_passport::{Passport, PASSPORT_SEED, VAULT_SEED};
 
 use crate::{dynamic_bonding_curve, error::RiffDbcError, instructions::shared, *};
 
-/// The artist, verified by riff's verifier, claims their coin: they get the
-/// fees held for them, and become the pool's creator, so Meteora pays their
-/// share of every later trade straight to them.
+/// The artist claims their coin with their Artist Passport, co-signed by
+/// riff's verifier. The coin's artist becomes the passport's vault: the fees
+/// held so far, and every later share, are paid there in SOL.
+///
+/// A late claim doesn't take back what already belongs to the charity: what
+/// was held until now goes to charity, only later fees to the artist.
 #[derive(Accounts)]
 pub struct ClaimArtist<'info> {
-    pub artist: Signer<'info>,
+    /// The passport's wallet. Also pays the rent of `unwrap`, and gets it back.
+    #[account(mut)]
+    pub wallet: Signer<'info>,
     #[account(address = config.verifier)]
     pub verifier: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
     #[account(mut, seeds = [COIN_SEED, base_mint.key().as_ref()], bump = coin.bump)]
     pub coin: Box<Account<'info, Coin>>,
-    /// CHECK: PDA, the pool creator until now.
+    /// The passport of this coin's artist: its seeds hold the artist ID.
+    #[account(
+        seeds = [PASSPORT_SEED, coin.artist_id.as_bytes()],
+        bump = passport.bump,
+        seeds::program = riff_passport::ID,
+        constraint = passport.wallet == wallet.key() @ RiffDbcError::NotPassportWallet,
+        constraint = !passport.revoked @ RiffDbcError::PassportRevoked,
+    )]
+    pub passport: Box<Account<'info, Passport>>,
+    /// CHECK: the passport's vault (its address is checked by seeds).
+    #[account(
+        mut,
+        seeds = [VAULT_SEED, passport.key().as_ref()],
+        bump = passport.vault_bump,
+        seeds::program = riff_passport::ID,
+    )]
+    pub passport_vault: UncheckedAccount<'info>,
+    /// CHECK: PDA, the pool creator.
     #[account(seeds = [ESCROW_SEED, base_mint.key().as_ref()], bump = coin.escrow_bump)]
     pub escrow: UncheckedAccount<'info>,
     #[account(mut, seeds = [ARTIST_VAULT_SEED, base_mint.key().as_ref()], bump)]
     pub artist_vault: Box<Account<'info, TokenAccount>>,
+    #[account(
+        init,
+        payer = wallet,
+        seeds = [UNWRAP_SEED, base_mint.key().as_ref()],
+        bump,
+        token::mint = quote_mint,
+        token::authority = escrow,
+        token::token_program = token_quote_program,
+    )]
+    pub unwrap: Box<Account<'info, TokenAccount>>,
     /// CHECK: the escrow's account for the coin (see create_coin).
     #[account(mut)]
     pub escrow_base_account: UncheckedAccount<'info>,
-    #[account(mut, token::mint = quote_mint, constraint = artist_quote_account.owner == artist.key() @ RiffDbcError::WrongReceiver)]
-    pub artist_quote_account: Box<Account<'info, TokenAccount>>,
-    /// CHECK: riff's DBC config.
-    #[account(address = config.dbc_config)]
-    pub dbc_config: UncheckedAccount<'info>,
+    #[account(mut, token::mint = quote_mint, constraint = charity_quote_account.owner == config.charity @ RiffDbcError::WrongReceiver)]
+    pub charity_quote_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: checked by Meteora.
     pub pool_authority: UncheckedAccount<'info>,
     /// CHECK: must be this coin's pool.
@@ -51,15 +81,12 @@ pub struct ClaimArtist<'info> {
     pub dbc_program: Program<'info, dynamic_bonding_curve::program::DynamicBondingCurve>,
     pub token_quote_program: Program<'info, Token>,
     pub token_base_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
 }
 
 pub fn handle_claim_artist<'info>(ctx: Context<'info, ClaimArtist<'info>>) -> Result<()> {
     let a = ctx.accounts;
     require!(a.coin.artist.is_none(), RiffDbcError::AlreadyClaimed);
-    require!(
-        Clock::get()?.unix_timestamp <= a.coin.claim_deadline,
-        RiffDbcError::ClaimWindowClosed
-    );
 
     let mint = a.base_mint.key();
     let escrow_bump = [a.coin.escrow_bump];
@@ -82,26 +109,27 @@ pub fn handle_claim_artist<'info>(ctx: Context<'info, ClaimArtist<'info>>) -> Re
         &escrow_signer,
     )?;
     a.coin.artist_fees_total += collected;
-    shared::empty_artist_vault(
+
+    if Clock::get()?.unix_timestamp > a.coin.claim_deadline {
+        shared::empty_artist_vault(
+            &a.token_quote_program.to_account_info(),
+            &a.artist_vault,
+            &a.charity_quote_account.to_account_info(),
+            &a.escrow.to_account_info(),
+            &escrow_signer,
+        )?;
+        a.artist_vault.reload()?;
+    }
+    shared::pay_artist_sol(
         &a.token_quote_program.to_account_info(),
+        &a.system_program.to_account_info(),
         &a.artist_vault,
-        &a.artist_quote_account.to_account_info(),
+        &a.unwrap.to_account_info(),
+        &a.wallet.to_account_info(),
+        &a.passport_vault.to_account_info(),
         &a.escrow.to_account_info(),
         &escrow_signer,
     )?;
-
-    dynamic_bonding_curve::cpi::transfer_pool_creator(CpiContext::new_with_signer(
-        a.dbc_program.key(),
-        dynamic_bonding_curve::cpi::accounts::TransferPoolCreator {
-            virtual_pool: a.pool.to_account_info(),
-            config: a.dbc_config.to_account_info(),
-            creator: a.escrow.to_account_info(),
-            new_creator: a.artist.to_account_info(),
-            event_authority: a.dbc_event_authority.to_account_info(),
-            program: a.dbc_program.to_account_info(),
-        },
-        &[&escrow_signer],
-    ))?;
-    a.coin.artist = Some(a.artist.key());
+    a.coin.artist = Some(a.passport_vault.key());
     Ok(())
 }

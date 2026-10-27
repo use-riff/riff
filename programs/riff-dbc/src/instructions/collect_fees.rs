@@ -1,23 +1,24 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
-    token::{self, Mint, Token, TokenAccount, Transfer},
+    token::{Mint, Token, TokenAccount},
     token_2022::Token2022,
 };
 
 use crate::{dynamic_bonding_curve, error::RiffDbcError, instructions::shared, *};
 
-/// Collects a coin's fees from Meteora. Anyone can call it (a crank).
+/// Collects a coin's trading fees from Meteora's curve. Anyone can call it
+/// (a crank).
 ///
 /// - The partner share is split between the coin's launcher and riff.
-/// - Until the artist claims, the creator share goes to the coin's artist
-///   vault. After they claim, Meteora pays the artist directly.
+/// - The creator share goes to the coin's artist vault, where it waits for
+///   the artist (`pay_artist`) or for charity (`sweep_charity`).
 #[derive(Accounts)]
 pub struct CollectFees<'info> {
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
     pub config: Box<Account<'info, Config>>,
     #[account(mut, seeds = [COIN_SEED, base_mint.key().as_ref()], bump = coin.bump)]
     pub coin: Box<Account<'info, Coin>>,
-    /// CHECK: PDA, the pool creator until the artist claims.
+    /// CHECK: PDA, the pool creator.
     #[account(seeds = [ESCROW_SEED, base_mint.key().as_ref()], bump = coin.escrow_bump)]
     pub escrow: UncheckedAccount<'info>,
     /// CHECK: PDA, the DBC config's fee claimer.
@@ -91,53 +92,36 @@ pub fn handle_collect_fees<'info>(ctx: Context<'info, CollectFees<'info>>) -> Re
         u64::MAX,
     )?;
     a.fees_vault.reload()?;
-    let partner = a.fees_vault.amount - before;
-    let to_launcher = (partner as u128 * a.config.launcher_share_bps as u128 / BPS as u128) as u64;
-    for (to, amount) in [
-        (a.launcher_quote_account.to_account_info(), to_launcher),
-        (
-            a.treasury_quote_account.to_account_info(),
-            partner - to_launcher,
-        ),
-    ] {
-        if amount > 0 {
-            token::transfer(
-                CpiContext::new_with_signer(
-                    a.token_quote_program.key(),
-                    Transfer {
-                        from: a.fees_vault.to_account_info(),
-                        to,
-                        authority: a.fee_authority.to_account_info(),
-                    },
-                    &[fee_signer],
-                ),
-                amount,
-            )?;
-        }
-    }
+    let to_launcher = shared::split_partner_share(
+        &a.token_quote_program.to_account_info(),
+        &a.fees_vault,
+        &a.launcher_quote_account.to_account_info(),
+        &a.treasury_quote_account.to_account_info(),
+        &a.fee_authority.to_account_info(),
+        fee_signer,
+        a.config.launcher_share_bps,
+        a.fees_vault.amount - before,
+    )?;
     a.coin.launcher_fees_total += to_launcher;
 
-    // Creator share, while riff's escrow is still the creator.
-    if a.coin.artist.is_none() {
-        let mint = a.base_mint.key();
-        let escrow_bump = [a.coin.escrow_bump];
-        let collected = shared::collect_creator_fees(
-            &a.dbc_program.to_account_info(),
-            &a.pool_authority.to_account_info(),
-            &a.pool.to_account_info(),
-            &a.escrow_base_account.to_account_info(),
-            &mut a.artist_vault,
-            &a.base_vault.to_account_info(),
-            &a.quote_vault.to_account_info(),
-            &a.base_mint.to_account_info(),
-            &a.quote_mint.to_account_info(),
-            &a.escrow.to_account_info(),
-            &a.token_base_program.to_account_info(),
-            &a.token_quote_program.to_account_info(),
-            &a.dbc_event_authority.to_account_info(),
-            &shared::escrow_seeds(&mint, &escrow_bump),
-        )?;
-        a.coin.artist_fees_total += collected;
-    }
+    let mint = a.base_mint.key();
+    let escrow_bump = [a.coin.escrow_bump];
+    let collected = shared::collect_creator_fees(
+        &a.dbc_program.to_account_info(),
+        &a.pool_authority.to_account_info(),
+        &a.pool.to_account_info(),
+        &a.escrow_base_account.to_account_info(),
+        &mut a.artist_vault,
+        &a.base_vault.to_account_info(),
+        &a.quote_vault.to_account_info(),
+        &a.base_mint.to_account_info(),
+        &a.quote_mint.to_account_info(),
+        &a.escrow.to_account_info(),
+        &a.token_base_program.to_account_info(),
+        &a.token_quote_program.to_account_info(),
+        &a.dbc_event_authority.to_account_info(),
+        &shared::escrow_seeds(&mint, &escrow_bump),
+    )?;
+    a.coin.artist_fees_total += collected;
     Ok(())
 }

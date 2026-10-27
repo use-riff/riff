@@ -2,10 +2,17 @@
   "name": "riff-dbc-config",
   "private": true,
   "type": "module",
-  "description": "Builds riff's Meteora DBC config parameters with Meteora's SDK.",
-  "scripts": { "gen": "node gen-config.mjs" },
+  "description": "riff's Meteora DBC config (Meteora's SDK), and riff-dbc's devnet setup and end-to-end run.",
+  "scripts": {
+    "gen": "node gen-config.mjs",
+    "devnet:setup": "node devnet.mjs setup",
+    "devnet:e2e": "node devnet.mjs e2e",
+    "devnet:status": "node devnet.mjs status"
+  },
   "dependencies": {
-    "@meteora-ag/dynamic-bonding-curve-sdk": "1.5.13",
+    "@coral-xyz/anchor": "0.31.1",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "2.0.0",
+    "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "^1.98.0",
     "bn.js": "^5.2.1"
   }
