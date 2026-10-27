@@ -43,5 +43,24 @@
         "programId": null
       }
     }
+  },
+  "dbc": {
+    "program": "riff-dbc",
+    "build": "make build (same toolchain; no devnet feature: Meteora's programs have the same addresses on devnet)",
+    "clusters": {
+      "devnet": {
+        "status": "live, for testing",
+        "programId": "gATYd3vfHCPCrhFupj8HxVX78syyXNfPSbYRsttm9RF",
+        "config": "6CLkcP4aNj9dkQRy6PbYgPkhyZrxzFUke621hzAJrDyH",
+        "meteoraConfig": "5m2xhUh7aJJ2KfwkHk7qNCCDaUzmzp15detHbZA1TfsZ",
+        "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
+        "notes": "0.3 -> 3 SOL market cap (graduates at ~0.72 SOL), 0.01 SOL launch buy cap, 1-hour claim window. Set up with programs/riff-dbc/config/devnet.mjs.",
+        "binarySha256": "9210fcb2d28168a983706ece526dc918e73104f5432bf4cb9cac52924f077175"
+      },
+      "mainnet-beta": {
+        "status": "not deployed",
+        "programId": null
+      }
+    }
   }
 }

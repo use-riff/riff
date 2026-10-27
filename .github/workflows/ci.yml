@@ -73,6 +73,11 @@ jobs:
           install -m 0755 /tmp/anchor "$HOME/.local/bin/anchor"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # Meteora's programs for riff-dbc's tests: downloaded from mainnet and
+      # checked against pinned hashes, not committed (licence).
+      - name: Download Meteora programs
+        run: make dbc-fixtures
+
       - name: Build (SBPF v0)
         run: make build
 
