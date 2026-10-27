@@ -1,6 +1,4 @@
-mod common;
-
-use {common::*, riff::error::ErrorCode, solana_signer::Signer};
+use {crate::common::*, riff::error::ErrorCode, solana_signer::Signer};
 
 #[test]
 fn initializes_config() {

@@ -8,8 +8,20 @@ Raydium pool.
 > riff is live on **devnet** only. It is not on mainnet and has not launched a
 > token. Official launches are only announced by [@useRiffPad](https://x.com/useRiffPad).
 
-This repository holds the on-chain program only. The app and other
+This repository holds the on-chain programs only. The app and other
 off-chain services live elsewhere.
+
+**At a glance**
+
+- **Live demo:** https://riffpad.fun (devnet) · **Deck:** https://riffpad.fun/deck
+- **Two Anchor programs:** `riff` (coins, curve, fees, artist claim,
+  graduation into Raydium) and `riff-passport` (verified artist identity with
+  passkey 2FA and time-locked recovery).
+- **~3,600 lines of program code**, 31 instructions, **134 tests** on LiteSVM
+  against the real mainnet SPL Token, Token-2022 and Raydium programs.
+- **Security:** internal review with four findings fixed (H-01, M-01, M-02,
+  L-01), each with regression tests; CI with clippy, `cargo audit` and
+  gitleaks; an [audit package](docs/AUDIT_PACKAGE.md) for reviewers.
 
 ## Try it
 
@@ -26,7 +38,12 @@ off-chain services live elsewhere.
    launch buy.
 5. **Claim** a coin as its artist. A demo verifier stands in for riff's
    real artist verification on devnet.
-6. **Graduate** a sold-out coin into Raydium, then trade it there.
+6. **Get an Artist Passport** at `/passport`: prove who you are with an
+   email from Spotify for Artists (or a code in your Spotify bio) plus your
+   distributor's or Apple Music for Artists' email, then set up Face ID or a
+   fingerprint. Endorse your coins, and see what a passport says about any
+   coin at `/check`.
+7. **Graduate** a sold-out coin into Raydium, then trade it there.
 
 On devnet the curve is 100 times cheaper than on mainnet, so a coin sells out
 with about 0.85 SOL.
@@ -53,12 +70,27 @@ flowchart LR
   link an unclaimed coin to a wallet; it can't touch curve SOL, other fees or
   claimed coins.
 
+### Artist Passport
+
+[`programs/riff-passport`](programs/riff-passport/README.md) gives musicians
+an on-chain identity. A passport needs at least two independent proofs, one
+of them strong: an email from Spotify for Artists with Spotify's signature,
+or a code in the artist's Spotify bio. After that, a passkey is required for
+every sensitive action, checked by Solana's secp256r1 precompile. Recovery
+has a public time-lock that the artist's other proofs can veto, and a new
+passport waits out the same period before it can endorse or withdraw, so a
+passport made from a hacked inbox can be revoked and reissued to the real
+artist before it does harm. The artist's
+riff earnings sit in a passport vault that riff's own claim and withdraw
+instructions pay into. Any app can read which coins the artist endorses.
+
 ## Deployments
 
 | Cluster | Program | Config | Status |
 |---|---|---|---|
 | devnet | `59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV` | `96rEETSfoVcoUVjtBffBhjutmyynSrRfgDfjC3X7P4hK` | live, for testing |
 | mainnet-beta | — | — | not deployed |
+| devnet (Artist Passport) | `2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj` | see `deployments.json` | live, for testing |
 
 [`deployments.json`](deployments.json) has the details: build settings,
 Raydium addresses and authorities. Before trusting an address, check that the
@@ -150,10 +182,13 @@ Every state change emits an event (`CoinCreated`, `Trade`, `ArtistClaimed`,
   deployed on mainnet (`programs/riff/tests/fixtures/`), not mocks.
 - CI builds, tests, runs clippy, `cargo audit` and gitleaks on every change,
   and checks that `idl/` and `vectors/` match the program.
-- An internal security review found three issues that are fixed, each with
+- An internal security review found four issues that are fixed, each with
   regression tests: graduation into a DEX (H-01), the artist claim and
-  charity flow (M-01), and launch-slot bundling around the creator-buy cap
-  (M-02).
+  charity flow (M-01), launch-slot bundling around the creator-buy cap
+  (M-02), and coin metadata that could change after launch (L-01).
+- The Artist Passport's passkey checks run through Solana's secp256r1
+  precompile; tests sign with real P-256 keys the way browsers do, and one
+  shows the precompile rejecting a forged signature.
 - Not yet audited externally. See [`docs/AUDIT_PACKAGE.md`](docs/AUDIT_PACKAGE.md)
   for scope, invariants and known limitations.
 
@@ -168,8 +203,8 @@ charity, graduation, trading on Raydium) working end to end in the app.
 
 - an external security audit;
 - admin and upgrade authority moved to a Squads multisig with a time lock;
-- real artist verification (Spotify for Artists plus manual review) behind
-  the verifier;
+- artist verification in production (the Artist Passport's proofs are live
+  on devnet; more distributors to come);
 - an emergency pause, and a way to undo a fraudulent claim;
 - keeping the artist's cut after graduation;
 - verifiable builds, and the move to SBPF v3 before Solana stops accepting v0
@@ -184,18 +219,20 @@ Linux or WSL2, with Rust (pinned by `rust-toolchain.toml`), Agave/Solana
 CLI 4.1.2 and Anchor CLI 1.2.0:
 
 ```bash
-make build         # anchor build --arch v0 (SBPF v0, mainnet addresses)
-make build-devnet  # devnet build (Raydium's devnet addresses)
+make build         # both programs, SBPF v0, mainnet addresses (no IDL)
+make build-devnet  # devnet build of riff (Raydium's devnet addresses)
 make test          # build, then all tests on LiteSVM; no validator needed
 make lint
+make idl           # regenerate the published IDL in idl/
 ```
 
 ## Repository layout
 
 ```
 programs/riff/src/             the program
-programs/riff/tests/           integration tests (LiteSVM)
+programs/riff/tests/           integration tests (LiteSVM), one binary: tests/all/
 programs/riff/tests/fixtures/  mainnet program and account snapshots
+programs/riff-passport/        Artist Passport: verified artist identity, passkey 2FA, vault
 idl/                           Anchor IDL and TypeScript types (generated)
 vectors/curve.json             curve-math test vectors (generated)
 deployments.json               where riff is deployed and how it was built
@@ -204,7 +241,8 @@ docs/AUDIT_PACKAGE.md          for auditors
 
 ## Published files
 
-- `idl/riff.json`, `idl/riff.ts`: the program's interface, from `make idl`.
+- `idl/riff.json`, `idl/riff.ts`, `idl/riff_passport.json`,
+  `idl/riff_passport.ts`: the programs' interfaces, from `make idl`.
 - `vectors/curve.json`: thousands of buy, sell and fee-split cases computed by
   the program's own math, from `make vectors`. Any off-chain port of the
   curve should reproduce them exactly.

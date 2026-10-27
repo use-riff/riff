@@ -3,7 +3,7 @@
 //! TypeScript client, or yours) check themselves against them.
 //!
 //! Regenerate with:
-//!   cargo test -p riff --test curve_vectors -- --ignored
+//!   make vectors   (cargo test -p riff --test all curve_vectors -- --ignored)
 //! CI checks the committed file is up to date.
 
 use {

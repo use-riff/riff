@@ -1,9 +1,7 @@
 //! M-02: the creator-buy cap must hold for the whole launch, not just the
 //! `creator_buy_sol` field. `buy` is closed in the coin's creation slot.
 
-mod common;
-
-use {common::*, riff::error::ErrorCode, solana_keypair::Keypair, solana_signer::Signer};
+use {crate::common::*, riff::error::ErrorCode, solana_keypair::Keypair, solana_signer::Signer};
 
 const CAP: u64 = 30_000_000 * TOKEN;
 

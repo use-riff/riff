@@ -37,6 +37,11 @@ jobs:
         run: rustup toolchain install
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          # `make build-devnet` builds riff in its own target directory.
+          workspaces: |
+            . -> target
+            . -> target/devnet
 
       - name: Cache Solana CLI and SBF platform tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

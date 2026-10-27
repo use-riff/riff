@@ -1,8 +1,6 @@
-mod common;
-
 use {
+    crate::common::*,
     anchor_lang::prelude::Pubkey,
-    common::*,
     riff::{
         curve::{quote_buy, quote_sell, split_fee},
         error::ErrorCode,

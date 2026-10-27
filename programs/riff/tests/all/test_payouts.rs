@@ -1,8 +1,6 @@
-mod common;
-
 use {
-    anchor_lang::prelude::Pubkey, common::*, riff::error::ErrorCode, solana_keypair::Keypair,
-    solana_signer::Signer,
+    crate::common::*, anchor_lang::prelude::Pubkey, riff::error::ErrorCode,
+    solana_keypair::Keypair, solana_signer::Signer,
 };
 
 struct Launch {
