@@ -5,11 +5,14 @@
 //   node devnet.mjs e2e     # launch, trade, collect, claim, graduate, LP fees
 //                           # (--no-claim: without the passport steps)
 //   node devnet.mjs status  # what's deployed
+//                           # (the claim steps issue a test passport, then reset it)
+//   node devnet.mjs reset-passport  # if an e2e stopped before its reset
 //
 // Keys come from ~/.config/riff/devnet (never the repo): deployer.json is
 // riff-dbc's upgrade authority and pays; verifier.json co-signs claims;
 // rehearsal/e2e-trader.json is the wallet of devnet passport spotify:0RiffPassportDemo00001.
 // RPC: ~/.config/riff/devnet/rpc-url if present, else the public devnet RPC.
+import { createHash, webcrypto } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import anchor from "@coral-xyz/anchor";
@@ -39,6 +42,7 @@ import { riffConfig, validate } from "./gen-config.mjs";
 const KEYS = `${homedir()}/.config/riff/devnet`;
 const RPC = existsSync(`${KEYS}/rpc-url`) ? readFileSync(`${KEYS}/rpc-url`, "utf8").trim() : "https://api.devnet.solana.com";
 const IDL = JSON.parse(readFileSync(new URL("../../../idl/riff_dbc.json", import.meta.url)));
+const PASSPORT_IDL = JSON.parse(readFileSync(new URL("../../../idl/riff_passport.json", import.meta.url)));
 const CP_AMM_IDL = JSON.parse(readFileSync(new URL("../../../idls/cp_amm.json", import.meta.url)));
 
 const RIFF_DBC = new PublicKey(IDL.address);
@@ -64,6 +68,7 @@ const provider = new anchor.AnchorProvider(connection, new anchor.Wallet(deploye
 const riff = new anchor.Program(IDL, provider);
 const dbc = createDbcProgram(connection);
 const damm = new anchor.Program(CP_AMM_IDL, provider);
+const passportProgram = new anchor.Program(PASSPORT_IDL, provider);
 const meteora = new DynamicBondingCurveClient(connection, "confirmed");
 
 const pda = (seeds, program = RIFF_DBC) => PublicKey.findProgramAddressSync(seeds, program)[0];
@@ -155,6 +160,145 @@ async function setup() {
     await send([ix], [deployer], "riff-dbc config");
   }
   console.log(`riff-dbc config: ${configPda}`);
+}
+
+// ------------------------------------------------------------ passport
+
+const passportPda = pda([b("passport"), b(ARTIST_ID)], PASSPORT);
+const passportVaultPda = pda([b("vault"), passportPda.toBuffer()], PASSPORT);
+const passportConfigPda = pda([b("config")], PASSPORT);
+const sha256 = (...parts) => createHash("sha256").update(Buffer.concat(parts)).digest();
+const u64le = (n) => {
+  const out = Buffer.alloc(8);
+  out.writeBigUInt64LE(BigInt(n));
+  return out;
+};
+
+/// The demo passport's passkey: a software P-256 key in place of a browser's.
+async function demoPasskey() {
+  const path = `${KEYS}/rehearsal/e2e-passkey.jwk`;
+  const { subtle } = webcrypto;
+  if (!existsSync(path)) {
+    const pair = await subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+    writeFileSync(path, JSON.stringify(await subtle.exportKey("jwk", pair.privateKey)), { mode: 0o600 });
+  }
+  const jwk = JSON.parse(readFileSync(path));
+  const privateKey = await subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const y = Buffer.from(jwk.y, "base64url");
+  const passkey = Buffer.concat([Buffer.of(y[31] & 1 ? 3 : 2), Buffer.from(jwk.x, "base64url")]);
+  return { passkey, privateKey };
+}
+
+/// A WebAuthn assertion over `challenge`, as riffpad.fun's browser would
+/// make it, and the secp256r1 precompile instruction that checks it.
+async function assertion({ passkey, privateKey }, rpIdHash, challenge) {
+  const authenticatorData = Buffer.concat([Buffer.from(rpIdHash), Buffer.of(0x05), Buffer.alloc(4)]); // user present + verified
+  const clientDataJson = Buffer.from(
+    JSON.stringify({ type: "webauthn.get", challenge: Buffer.from(challenge).toString("base64url"), origin: "https://riffpad.fun" }),
+  );
+  const message = Buffer.concat([authenticatorData, sha256(clientDataJson)]);
+  const sig = Buffer.from(await webcrypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, privateKey, message));
+  // Solana's precompile wants a low-S signature.
+  const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+  const s = BigInt(`0x${sig.subarray(32).toString("hex")}`);
+  if (s > N / 2n) Buffer.from((N - s).toString(16).padStart(64, "0"), "hex").copy(sig, 32);
+  const header = Buffer.alloc(16);
+  const [keyOff, sigOff, msgOff] = [16, 49, 113];
+  header[0] = 1;
+  [sigOff, 0xffff, keyOff, 0xffff, msgOff, message.length, 0xffff].forEach((v, i) => header.writeUInt16LE(v, 2 + i * 2));
+  const precompile = new anchor.web3.TransactionInstruction({
+    programId: new PublicKey("Secp256r1SigVerify1111111111111111111111111"),
+    keys: [],
+    data: Buffer.concat([header, passkey, sig, message]),
+  });
+  return { precompile, proof: { authenticatorData, clientDataJson } };
+}
+
+/// Closes the test passport (devnet-only `reset_passport`), so it doesn't
+/// linger on riffpad.fun. Its vault's SOL goes to the deployer.
+async function resetPassport() {
+  // Not in the published IDL (that's the mainnet build), so built by hand.
+  const ix = new anchor.web3.TransactionInstruction({
+    programId: PASSPORT,
+    keys: [
+      { pubkey: deployer.publicKey, isSigner: true, isWritable: true },
+      { pubkey: passportConfigPda, isSigner: false, isWritable: false },
+      { pubkey: passportPda, isSigner: false, isWritable: true },
+      { pubkey: passportVaultPda, isSigner: false, isWritable: true },
+    ],
+    data: sha256(b("global:reset_passport")).subarray(0, 8),
+  });
+  await send([ix], [deployer], "reset the test passport");
+}
+
+/// Issues the e2e passport to rehearsal/e2e-trader.json, with two proofs
+/// riff's verifier records (devnet: nothing is checked off-chain).
+async function issuePassport() {
+  if (await connection.getAccountInfo(passportPda)) return console.log(`passport ${ARTIST_ID}: ${passportPda} (already issued)`);
+  const wallet = key("rehearsal/e2e-trader.json");
+  const verifier = key("verifier.json");
+  const config = await passportProgram.account.passportConfig.fetch(passportConfigPda);
+  const kinds = [{ spotifyEmail: {} }, { website: {} }];
+  const records = [0, 2].map((k) => pda([b("proof"), b(ARTIST_ID), wallet.publicKey.toBuffer(), Buffer.of(k)], PASSPORT));
+  const proofIxs = await Promise.all(
+    kinds.map((kind, i) =>
+      passportProgram.methods
+        .recordProof(ARTIST_ID, kind, [...sha256(b(`devnet demo proof ${i}`))])
+        .accountsStrict({
+          wallet: wallet.publicKey,
+          verifier: verifier.publicKey,
+          config: passportConfigPda,
+          proofRecord: records[i],
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction(),
+    ),
+  );
+  await send(proofIxs, [wallet, verifier], "record_proof x2 (verifier co-signs)");
+
+  const key_ = await demoPasskey();
+  const challenge = sha256(b("riff-passport:v1"), passportPda.toBuffer(), u64le(0), Buffer.of(0), key_.passkey);
+  const { precompile, proof } = await assertion(key_, config.rpIdHash, challenge);
+  const issue = await passportProgram.methods
+    .issuePassport(ARTIST_ID, [...key_.passkey], proof)
+    .accountsStrict({
+      wallet: wallet.publicKey,
+      config: passportConfigPda,
+      passport: passportPda,
+      vault: passportVaultPda,
+      instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+      systemProgram: SystemProgram.programId,
+    })
+    .remainingAccounts(records.map((pubkey) => ({ pubkey, isSigner: false, isWritable: false })))
+    .instruction();
+  await send([precompile, issue], [wallet], "issue_passport (with passkey)");
+  console.log(`passport ${ARTIST_ID}: ${passportPda}, vault ${passportVaultPda}`);
+}
+
+/// Withdraws from the passport's vault to its wallet: under the daily
+/// allowance, so the wallet alone signs. Waits out the passport's probation.
+async function withdrawFromVault(lamports) {
+  const wallet = key("rehearsal/e2e-trader.json");
+  const config = await passportProgram.account.passportConfig.fetch(passportConfigPda);
+  const issuedAt = (await passportProgram.account.passport.fetch(passportPda)).issuedAt.toNumber();
+  // The chain's clock, not this machine's: they can be minutes apart.
+  const chainNow = async () => connection.getBlockTime(await connection.getSlot());
+  const settledAt = issuedAt + config.recoveryDelay.toNumber();
+  if ((await chainNow()) < settledAt) console.log(`  waiting for the passport's probation to end (${settledAt - (await chainNow())}s on chain)`);
+  while ((await chainNow()) < settledAt + 2) await new Promise((r) => setTimeout(r, 10_000));
+  const before = await connection.getBalance(wallet.publicKey);
+  const ix = await passportProgram.methods
+    .withdraw(new BN(lamports), null)
+    .accountsStrict({
+      wallet: wallet.publicKey,
+      config: passportConfigPda,
+      passport: passportPda,
+      vault: passportVaultPda,
+      instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+    })
+    .instruction();
+  await send([ix], [wallet], `passport withdraw ${sol(lamports)} SOL`);
+  console.log(`  wallet +${sol((await connection.getBalance(wallet.publicKey)) - before)} SOL (less the tx fee)`);
 }
 
 // ------------------------------------------------------------ e2e
@@ -264,25 +408,28 @@ async function payArtist(c, vault) {
   await send([ix], [deployer], "pay_artist");
 }
 
-/// The DAMM v2 position whose NFT `owner` holds in `pool`'s coin, after
-/// migration (whoever ran it: us, or Meteora's keeper).
-async function positionOf(owner) {
+/// The DAMM v2 position in `dammPool` whose NFT `owner` holds, after
+/// migration (whoever ran it: us, or Meteora's keeper). The fee authority
+/// holds one in every graduated coin's pool.
+async function positionOf(owner, dammPool) {
   const { value } = await connection.getTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID });
   for (const { account } of value) {
     const mint = new PublicKey(account.data.subarray(0, 32));
     const position = pda([b("position"), mint.toBuffer()], DAMM);
-    if (account.data.readBigUInt64LE(64) === 1n && (await connection.getAccountInfo(position)))
+    if (account.data.readBigUInt64LE(64) !== 1n) continue;
+    const info = await connection.getAccountInfo(position);
+    if (info && dammPool.equals(new PublicKey(info.data.subarray(8, 40))))
       return { position, nftAccount: pda([b("position_nft_account"), mint.toBuffer()], DAMM) };
   }
-  throw new Error(`no DAMM v2 position held by ${owner}`);
+  throw new Error(`no DAMM v2 position in ${dammPool} held by ${owner}`);
 }
 
 async function e2e() {
   const config = await riff.account.config.fetch(configPda);
   const verifier = key("verifier.json");
   const artistWallet = key("rehearsal/e2e-trader.json");
-  const passport = pda([b("passport"), b(ARTIST_ID)], PASSPORT);
-  const passportVault = pda([b("vault"), passport.toBuffer()], PASSPORT);
+  const passport = passportPda;
+  const passportVault = passportVaultPda;
   if (!config.verifier.equals(verifier.publicKey)) throw new Error("verifier.json isn't riff-dbc's verifier");
 
   // Receiving WSOL accounts: launcher (the deployer here), treasury, charity.
@@ -344,6 +491,7 @@ async function e2e() {
   const claiming = !process.argv.includes("--no-claim");
   if (claiming) {
   console.log("\n3. The artist claims with their passport");
+  await issuePassport();
   const vaultBefore = await connection.getBalance(passportVault);
   const claim = await riff.methods
     .claimArtist()
@@ -378,8 +526,8 @@ async function e2e() {
     });
     await send(transaction.instructions.filter((ix) => !ix.programId.equals(ComputeBudgetProgram.programId)), [deployer, firstPositionNftKeypair, secondPositionNftKeypair], "migrate to DAMM v2");
   }
-  const creator = await positionOf(c.escrow);
-  const partner = await positionOf(feeAuthority);
+  const creator = await positionOf(c.escrow, dammPool);
+  const partner = await positionOf(feeAuthority, dammPool);
   console.log(`  DAMM v2 pool ${dammPool}; creator position ${creator.position}, partner position ${partner.position}`);
 
   console.log("\n5. A trade on the graduated pool, LP fees, and the artist's payout");
@@ -439,6 +587,10 @@ async function e2e() {
     const before = await connection.getBalance(passportVault);
     await payArtist(c, passportVault);
     console.log(`  passport vault +${sol((await connection.getBalance(passportVault)) - before)} SOL`);
+
+    console.log("\n6. The artist withdraws from the passport's vault");
+    await withdrawFromVault(Math.min(0.001 * LAMPORTS_PER_SOL, (await connection.getBalance(passportVault)) - (await connection.getMinimumBalanceForRentExemption(8 + 32))));
+    await resetPassport();
   } else console.log(`  artist share held: ${sol(await tokenAmount(c.artistVault))} SOL`);
 
   const record = await riff.account.coin.fetch(c.coin);
@@ -454,10 +606,12 @@ async function status() {
   else console.log("riff-dbc config: not initialized");
 }
 
-const commands = { setup, e2e, status };
+const commands = { setup, e2e, status, "reset-passport": resetPassport };
 const command = commands[process.argv[2]];
 if (!command) {
   console.error(`usage: node devnet.mjs ${Object.keys(commands).join("|")}`);
   process.exit(1);
 }
 await command();
+// The connection keeps a websocket open after confirming; end the process.
+process.exit(0);
