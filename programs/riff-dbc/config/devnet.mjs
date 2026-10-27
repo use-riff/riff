@@ -3,11 +3,12 @@
 //
 //   node devnet.mjs setup   # riff's Meteora config + riff-dbc's config (once)
 //   node devnet.mjs e2e     # launch, trade, collect, claim, graduate, LP fees
+//                           # (--no-claim: without the passport steps)
 //   node devnet.mjs status  # what's deployed
 //
 // Keys come from ~/.config/riff/devnet (never the repo): deployer.json is
 // riff-dbc's upgrade authority and pays; verifier.json co-signs claims;
-// e2e-trader.json is the wallet of devnet passport spotify:0RiffPassportDemo00001.
+// rehearsal/e2e-trader.json is the wallet of devnet passport spotify:0RiffPassportDemo00001.
 // RPC: ~/.config/riff/devnet/rpc-url if present, else the public devnet RPC.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -279,7 +280,7 @@ async function positionOf(owner) {
 async function e2e() {
   const config = await riff.account.config.fetch(configPda);
   const verifier = key("verifier.json");
-  const artistWallet = key("e2e-trader.json");
+  const artistWallet = key("rehearsal/e2e-trader.json");
   const passport = pda([b("passport"), b(ARTIST_ID)], PASSPORT);
   const passportVault = pda([b("vault"), passport.toBuffer()], PASSPORT);
   if (!config.verifier.equals(verifier.publicKey)) throw new Error("verifier.json isn't riff-dbc's verifier");
@@ -340,6 +341,8 @@ async function e2e() {
   await collectFees(config, c, deployer.publicKey);
   console.log(`  artist share held: ${sol(await tokenAmount(c.artistVault))} SOL`);
 
+  const claiming = !process.argv.includes("--no-claim");
+  if (claiming) {
   console.log("\n3. The artist claims with their passport");
   const vaultBefore = await connection.getBalance(passportVault);
   const claim = await riff.methods
@@ -362,6 +365,7 @@ async function e2e() {
     .instruction();
   await send([claim], [artistWallet, verifier], "claim_artist");
   console.log(`  passport vault +${sol((await connection.getBalance(passportVault)) - vaultBefore)} SOL`);
+  }
 
   console.log("\n4. Graduation: buy out the curve, migrate to DAMM v2");
   await buy(config.dbcConfig, c, deployer, 0.8 * LAMPORTS_PER_SOL, true);
@@ -431,9 +435,11 @@ async function e2e() {
     .instruction();
   await send([lp], [deployer], "collect_lp_fees");
   await collectFees(config, c, deployer.publicKey);
-  const before = await connection.getBalance(passportVault);
-  await payArtist(c, passportVault);
-  console.log(`  passport vault +${sol((await connection.getBalance(passportVault)) - before)} SOL`);
+  if (claiming) {
+    const before = await connection.getBalance(passportVault);
+    await payArtist(c, passportVault);
+    console.log(`  passport vault +${sol((await connection.getBalance(passportVault)) - before)} SOL`);
+  } else console.log(`  artist share held: ${sol(await tokenAmount(c.artistVault))} SOL`);
 
   const record = await riff.account.coin.fetch(c.coin);
   console.log(`\nDone. Coin ${c.mint}: artist fees ${sol(record.artistFeesTotal)} SOL, launcher fees ${sol(record.launcherFeesTotal)} SOL, artist ${record.artist}`);
