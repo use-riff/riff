@@ -5,8 +5,8 @@ A running record of what's done, with evidence, and what's left for humans. Noth
 | # | Item | Status |
 |---|---|---|
 | 1 | Devnet Passport upgrade, full devnet e2e with the claim | **Done** (2026-10-27) |
-| 2 | riff-dbc hardening (late-claim LP fees, events, threat review, tests) | **Done**, pending this PR's CI |
-| 3 | Audit package for riff-dbc + riff-passport | Not started |
+| 2 | riff-dbc hardening (late-claim LP fees, events, threat review, tests) | **Done** |
+| 3 | Audit package for riff-dbc + riff-passport | **Written**; verifiable build not run; audit itself is for humans |
 | 4 | riffpad.fun on riff-dbc | Not started |
 | 5 | Mainnet parameters and keys plan | Not started |
 | 6 | Operations: cranks, alerts, runbook, fee and charity ledger | Not started |
@@ -55,3 +55,9 @@ Passport recovery and reissue are simulated in these tests by rewriting the pass
 **Threat notes** per instruction go in the audit package (item 3).
 
 **Left:** real fuzzing is not done; that's a decision for the audit.
+
+## 3. Audit package
+
+[`AUDIT_PACKAGE_DBC.md`](AUDIT_PACKAGE_DBC.md): scope, trust model, what's relied on from Meteora, invariants, threat notes per instruction, known limits, tests, questions.
+
+**Left for humans:** choosing and hiring the auditor. **Left to do:** `make verifiable` (needs Docker running and `solana-verify`; not run, and the target itself is untested).
