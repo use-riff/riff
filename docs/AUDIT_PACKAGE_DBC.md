@@ -126,9 +126,18 @@ riff-dbc's tests write Passport accounts directly; `cargo test -p riff-passport`
 
 ## Build reproducibility
 
-The toolchain is pinned: `rust-toolchain.toml`, `Cargo.lock`, and CI pins Solana CLI and Anchor by hash. `make build` is the canonical build. Building a single package with `cargo build-sbf` gave a different binary (467,528 vs 450,064 bytes for riff-dbc), so compare only like with like.
+The toolchain is pinned: `rust-toolchain.toml`, `Cargo.lock`, and CI pins Solana CLI and Anchor by hash.
 
-`make verifiable` runs `solana-verify build` for both programs, in Docker. **It hasn't been run yet**: this machine has no Docker engine or `solana-verify`. Whether a verifiable image exists for Solana CLI 4.1.2 needs checking. To do before mainnet: run it, deploy that binary, and publish with `solana-verify verify-from-repo`.
+`make verifiable` builds both programs with `solana-verify` in Docker, using the Solana Foundation's 4.1.2 image pinned by digest. **This is the build to audit and deploy.** At `7cab289`, from a clean clone:
+
+| Program | Size | File sha256 | `solana-verify` executable hash |
+|---|---|---|---|
+| riff-dbc | 467,528 bytes | `d0ac7ecb0e2eea9566b26e6a125db999b520d82ea2ddd46996db7a5f588625a1` | `d6cba7b8dc6ff522b99957ea3ca99b7f0648319572e7f500446221093039c8b0` |
+| riff-passport | 515,528 bytes | `8cc94ed640ce4ee78f886a3b432cea93352db342c59986a985be081f9522678f` | `704317afd73359807aa9721fc8803f19f4253c40844b31fe51808111ff35a203` |
+
+riff-dbc's matched a `cargo build-sbf --manifest-path programs/riff-dbc/Cargo.toml --arch v0` run on the developer's machine byte for byte. `make build` (Anchor, building the whole workspace) gives different binaries, for example 450,064 bytes for riff-dbc. CI and devnet use that build. The riff-dbc and riff-passport test suites also pass on the verifiable binaries above (21 and 27 tests).
+
+Still to do at launch: `solana-verify verify-from-repo` against the deployed programs, once they exist.
 
 ## Questions for the audit
 

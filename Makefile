@@ -2,7 +2,7 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet build-passport-devnet test fmt lint clean deploy-devnet deploy-passport-devnet deploy-dbc-devnet idl vectors dbc-fixtures verifiable
+.PHONY: build build-devnet build-passport-devnet test fmt lint clean deploy-devnet deploy-passport-devnet deploy-dbc-devnet idl vectors dbc-fixtures verifiable deploy-dbc-mainnet deploy-passport-mainnet
 
 # riff-dbc's tests run against Meteora's Dynamic Bonding Curve program as
 # deployed on mainnet. Its source is under a non-commercial licence, so it's
@@ -50,10 +50,15 @@ build-passport-devnet:
 	CARGO_TARGET_DIR=$(CURDIR)/target/devnet cargo build-sbf --manifest-path programs/riff-passport/Cargo.toml \
 	  --arch $(ARCH) --features devnet --sbf-out-dir $(CURDIR)/target/devnet/deploy
 
-# Reproducible builds of the mainnet programs (needs Docker and solana-verify).
+# Reproducible builds of the mainnet programs, in Docker (needs solana-verify).
+# Mainnet deploys these, not `make build`'s: anchor builds the workspace
+# together, which gives different binaries from this per-program build. They
+# land in target/deploy, so run `make build` to go back; tests run on either.
+VERIFY_IMAGE := solanafoundation/solana-verifiable-build@sha256:2e0b78f44ee76612e9260c7c988570c5e14de6fbd93e0ab07115ec7054473b4f
+
 verifiable:
-	solana-verify build --library-name riff_dbc
-	solana-verify build --library-name riff_passport
+	solana-verify build --base-image $(VERIFY_IMAGE) --library-name riff_dbc
+	solana-verify build --base-image $(VERIFY_IMAGE) --library-name riff_passport
 
 test: build $(DBC_SO) $(DAMM_SO)
 	cargo test
@@ -88,6 +93,30 @@ deploy-dbc-devnet: build
 	solana program deploy target/deploy/riff_dbc.so \
 	  --program-id $(DEVNET_KEYS)/riff-dbc-program.json \
 	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
+
+# Mainnet (keys in ~/.config/riff/mainnet, never in the repo). Dry run unless
+# CONFIRM=mainnet: this costs real SOL. Only run with the owner's go-ahead, on a
+# commit whose `make verifiable` hashes are in docs/MAINNET_LAUNCH.md.
+MAINNET_KEYS ?= $(HOME)/.config/riff/mainnet
+MAINNET_URL ?= mainnet-beta
+
+define deploy_mainnet
+	@solana-verify get-executable-hash target/deploy/$(1).so
+	@if [ "$(CONFIRM)" != "mainnet" ]; then \
+	  echo "Dry run. With CONFIRM=mainnet this deploys target/deploy/$(1).so as $(2) on $(MAINNET_URL), paid by $(MAINNET_KEYS)/deployer.json."; \
+	else \
+	  solana program deploy target/deploy/$(1).so \
+	    --program-id $(MAINNET_KEYS)/$(2).json \
+	    --keypair $(MAINNET_KEYS)/deployer.json --url $(MAINNET_URL) \
+	    --with-compute-unit-price 100000 --use-rpc; \
+	fi
+endef
+
+deploy-dbc-mainnet:
+	$(call deploy_mainnet,riff_dbc,riff-dbc-program)
+
+deploy-passport-mainnet:
+	$(call deploy_mainnet,riff_passport,riff-passport-program)
 
 # Downloads Meteora's programs if they're missing; `make dbc-fixtures`
 # refreshes them.
