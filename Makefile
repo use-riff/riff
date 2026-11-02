@@ -2,7 +2,7 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet build-passport-devnet test fmt lint clean deploy-devnet deploy-passport-devnet deploy-dbc-devnet idl vectors dbc-fixtures
+.PHONY: build build-devnet build-passport-devnet test fmt lint clean deploy-devnet deploy-passport-devnet deploy-dbc-devnet idl vectors dbc-fixtures verifiable
 
 # riff-dbc's tests run against Meteora's Dynamic Bonding Curve program as
 # deployed on mainnet. Its source is under a non-commercial licence, so it's
@@ -49,6 +49,11 @@ build-devnet:
 build-passport-devnet:
 	CARGO_TARGET_DIR=$(CURDIR)/target/devnet cargo build-sbf --manifest-path programs/riff-passport/Cargo.toml \
 	  --arch $(ARCH) --features devnet --sbf-out-dir $(CURDIR)/target/devnet/deploy
+
+# Reproducible builds of the mainnet programs (needs Docker and solana-verify).
+verifiable:
+	solana-verify build --library-name riff_dbc
+	solana-verify build --library-name riff_passport
 
 test: build $(DBC_SO) $(DAMM_SO)
 	cargo test

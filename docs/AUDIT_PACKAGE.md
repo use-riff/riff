@@ -1,5 +1,7 @@
 # riff: audit package
 
+> This covers the old `programs/riff`, which is being replaced. For what will launch, see `AUDIT_PACKAGE_DBC.md`.
+
 Everything an external auditor needs to quote and start.
 
 ## What riff is
