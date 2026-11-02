@@ -76,7 +76,7 @@ npm run devnet:e2e                  # a coin's whole life, on devnet
 npm run devnet:status
 ```
 
-`devnet:e2e` launches a coin for the devnet passport `spotify:0RiffPassportDemo00001` with a launch buy, trades it, collects fees, claims it with the passport (and riff's verifier), buys out the curve, migrates it to DAMM v2, trades there, collects the LP fees and pays the artist. It prints an explorer link for each step. It needs about 1 SOL in `deployer.json` per run.
+`devnet:e2e` launches a coin for the test artist `spotify:0RiffPassportDemo00001` with a launch buy, trades it, collects fees, issues a test passport (riff's verifier records two proofs; a software passkey in `rehearsal/e2e-passkey.jwk` signs), claims the coin with it, buys out the curve, migrates it to DAMM v2, trades there, collects the LP fees, pays the artist, withdraws from the passport's vault and finally resets the passport (devnet-only `reset_passport`), so none is left on riffpad.fun. It prints an explorer link for each step and needs about 1 SOL in `deployer.json` per run. `node devnet.mjs reset-passport` cleans up after a run that stopped early.
 
 ## Files
 

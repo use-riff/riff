@@ -35,8 +35,8 @@
         "programId": "2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj",
         "config": "5S3RcpLwjs8eJ4GoV1stc2YeQNqvvKwhFS28iz5zM5ip",
         "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
-        "binarySha256": "274faa59c1010fc64e1f34cede0fdc88421d2e1aff21a4d3798d55631b965448",
-        "notes": "5-minute recovery time-lock and new-passport probation (72 hours planned for mainnet), 0.1 SOL a day without the passkey, proofs valid for 7 days, passkeys for riffpad.fun."
+        "binarySha256": "5ac1ec0e72b6f86a699d19fe10835af08fb4f1bea1987239ca9fe292e9a24bdc",
+        "notes": "5-minute recovery time-lock and new-passport probation (72 hours planned for mainnet), 0.1 SOL a day without the passkey, proofs valid for 7 days, passkeys for riffpad.fun. Upgraded 2026-10-27 to main (wallet_since layout); no passports are kept on devnet: the riff-dbc e2e issues a test passport and resets it."
       },
       "mainnet-beta": {
         "status": "not deployed",

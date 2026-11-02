@@ -63,16 +63,18 @@ clean:
 	anchor clean
 
 # Devnet deployment (keys in ~/.config/riff/devnet, never in the repo).
+# target/deploy/*-keypair.json are local throwaways that Anchor makes; they
+# aren't the devnet programs' keys, so these targets never use them.
 DEVNET_KEYS ?= $(HOME)/.config/riff/devnet
 
 deploy-devnet: build-devnet
 	solana program deploy target/deploy/riff-devnet.so \
-	  --program-id target/deploy/riff-keypair.json \
+	  --program-id 59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV \
 	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
 
 deploy-passport-devnet: build-passport-devnet
 	solana program deploy target/devnet/deploy/riff_passport.so \
-	  --program-id target/deploy/riff_passport-keypair.json \
+	  --program-id $(DEVNET_KEYS)/riff-passport-program.json \
 	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
 
 # riff-dbc has no devnet differences: Meteora's programs have the same
