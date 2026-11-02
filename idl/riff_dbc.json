@@ -317,6 +317,43 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "damm_pool_authority",
+          "optional": true
+        },
+        {
+          "name": "damm_pool",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creator_position",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creator_position_nft_account",
+          "optional": true
+        },
+        {
+          "name": "token_a_vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_b_vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "damm_event_authority",
+          "optional": true
+        },
+        {
+          "name": "damm_program",
+          "optional": true,
+          "address": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
         }
       ],
       "args": []
@@ -1419,6 +1456,73 @@
       ]
     }
   ],
+  "events": [
+    {
+      "name": "ArtistClaimed",
+      "discriminator": [
+        49,
+        29,
+        178,
+        17,
+        116,
+        114,
+        250,
+        30
+      ]
+    },
+    {
+      "name": "ArtistPaid",
+      "discriminator": [
+        27,
+        90,
+        139,
+        71,
+        7,
+        145,
+        41,
+        9
+      ]
+    },
+    {
+      "name": "CharitySwept",
+      "discriminator": [
+        168,
+        238,
+        74,
+        73,
+        31,
+        26,
+        101,
+        126
+      ]
+    },
+    {
+      "name": "CoinCreated",
+      "discriminator": [
+        155,
+        248,
+        204,
+        17,
+        205,
+        237,
+        158,
+        104
+      ]
+    },
+    {
+      "name": "FeesCollected",
+      "discriminator": [
+        233,
+        23,
+        117,
+        225,
+        107,
+        178,
+        254,
+        8
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -1499,9 +1603,82 @@
       "code": 6015,
       "name": "NotUpgradeAuthority",
       "msg": "Only the program's upgrade authority can initialize it"
+    },
+    {
+      "code": 6016,
+      "name": "LateClaimNeedsLpAccounts",
+      "msg": "A late claim on a graduated coin must collect its LP fees: pass the DAMM v2 accounts"
     }
   ],
   "types": [
+    {
+      "name": "ArtistClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "passport_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "late",
+            "type": "bool"
+          },
+          {
+            "name": "paid_to_artist",
+            "type": "u64"
+          },
+          {
+            "name": "sent_to_charity",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ArtistPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "passport_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CharitySwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Coin",
       "type": {
@@ -1566,6 +1743,34 @@
           {
             "name": "escrow_bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CoinCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "launcher",
+            "type": "pubkey"
+          },
+          {
+            "name": "artist_id",
+            "type": "string"
+          },
+          {
+            "name": "claim_deadline",
+            "type": "i64"
           }
         ]
       }
@@ -1736,6 +1941,38 @@
           {
             "name": "artist_name",
             "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesCollected",
+      "docs": [
+        "`lp` is true for LP fees of the graduated pool, false for the curve's",
+        "trading fees."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp",
+            "type": "bool"
+          },
+          {
+            "name": "to_launcher",
+            "type": "u64"
+          },
+          {
+            "name": "to_treasury",
+            "type": "u64"
+          },
+          {
+            "name": "to_artist_vault",
+            "type": "u64"
           }
         ]
       }

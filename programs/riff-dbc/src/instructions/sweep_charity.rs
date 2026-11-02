@@ -4,7 +4,9 @@ use anchor_spl::{
     token_2022::Token2022,
 };
 
-use crate::{dynamic_bonding_curve, error::RiffDbcError, instructions::shared, *};
+use crate::{
+    dynamic_bonding_curve, error::RiffDbcError, events::CharitySwept, instructions::shared, *,
+};
 
 /// After the claim window, sends a coin's unclaimed artist fees to music
 /// charity. Anyone can call it, as often as fees come in.
@@ -20,7 +22,7 @@ pub struct SweepCharity<'info> {
     #[account(mut, seeds = [ARTIST_VAULT_SEED, base_mint.key().as_ref()], bump)]
     pub artist_vault: Box<Account<'info, TokenAccount>>,
     /// CHECK: the escrow's account for the coin (see create_coin).
-    #[account(mut)]
+    #[account(mut, address = shared::escrow_base_address(&escrow.key(), &base_mint.key()))]
     pub escrow_base_account: UncheckedAccount<'info>,
     #[account(mut, token::mint = quote_mint, constraint = charity_quote_account.owner == config.charity @ RiffDbcError::WrongReceiver)]
     pub charity_quote_account: Box<Account<'info, TokenAccount>>,
@@ -74,12 +76,13 @@ pub fn handle_sweep_charity<'info>(ctx: Context<'info, SweepCharity<'info>>) -> 
         &escrow_signer,
     )?;
     a.coin.artist_fees_total += collected;
-    shared::empty_artist_vault(
+    let amount = shared::empty_artist_vault(
         &a.token_quote_program.to_account_info(),
         &a.artist_vault,
         &a.charity_quote_account.to_account_info(),
         &a.escrow.to_account_info(),
         &escrow_signer,
     )?;
+    emit!(CharitySwept { mint, amount });
     Ok(())
 }

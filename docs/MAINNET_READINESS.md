@@ -5,7 +5,7 @@ A running record of what's done, with evidence, and what's left for humans. Noth
 | # | Item | Status |
 |---|---|---|
 | 1 | Devnet Passport upgrade, full devnet e2e with the claim | **Done** (2026-10-27) |
-| 2 | riff-dbc hardening (late-claim LP fees, events, threat review, tests) | Not started |
+| 2 | riff-dbc hardening (late-claim LP fees, events, threat review, tests) | **Done**, pending this PR's CI |
 | 3 | Audit package for riff-dbc + riff-passport | Not started |
 | 4 | riffpad.fun on riff-dbc | Not started |
 | 5 | Mainnet parameters and keys plan | Not started |
@@ -28,6 +28,30 @@ riff-passport on devnet (`2nke6euX…`) ran a build from before `wallet_since` (
   - [pay_artist](https://explorer.solana.com/tx/4M19kVVp3aW1qYofnRVZYpii7yn8tsqybvkAMVBNZrmMkWcqX56fxZJJFhHWr84GyRdeJzfkb3VZxPncLj2Q7C7c?cluster=devnet): passport vault +0.005404 SOL
   - [passport withdraw](https://explorer.solana.com/tx/d6JR6UnzH1Vy5RSzL4PR42LvVjvG9buYtFq8usMnK7Gi2TwDwsa1DqiVcREKiQMH35Nuo3xEXJVyLmFbhM9oWfb?cluster=devnet) of 0.001 SOL from the vault to the passport's wallet, after its probation
   - [reset of the test passport](https://explorer.solana.com/tx/5gMwBHFkWBsed7Rsec3SqeNwa24jtFSKZn6sNrj2TPMuCyZUHY3BC3AHj9U43a4cPcsn7kdEHzAXcz6WLZqeBq9Q?cluster=devnet): devnet has no passports now
-- Found on the way: WSL's clock was minutes behind the chain's, so the probation wait uses the chain's clock.
+- Found on the way: a probation wait based on this machine's clock ran out minutes before the chain's clock got there, so the wait uses the chain's clock.
 
 **Left:** riffpad.fun's devnet passport pages read the old layout until riff-site syncs the new IDL (item 4). There are no devnet passports to show meanwhile.
+
+## 2. riff-dbc hardening
+
+**Late claim after graduation (was known limit 1): fixed in the program.** `claim_artist` reads the DBC pool's `is_migrated`. On a late claim of a migrated coin it requires the DAMM v2 accounts and collects the creator position's LP fees into the artist vault before sending the vault to charity; without them it refuses (`LateClaimNeedsLpAccounts`).
+
+*What this relies on:* nothing on chain can tell the migration's creator position from another one in the same pool. DAMM v2's `create_position` takes any owner without its signature (per the IDL), and the position NFT accounts checked on devnet have no immutable-owner extension, so a dust position could be made or handed to the escrow. This wasn't run as an attack; the design assumes it works. A late claimer passing such a position would keep the real position's uncollected fees. So the **verifier vouches for `creator_position`**: `api/claim.ts` must pass the migration's position (the escrow's position in the coin's derived DAMM pool with the largest permanently locked liquidity) and refuse anything else. The crank collecting LP fees often keeps the amount at stake small either way.
+
+On devnet (`node devnet.mjs e2e --late`, binary `cfaa3131…` from `make build`): a coin with a 2-minute window graduated, traded on DAMM v2 with nothing collected, and the artist claimed late. Without the LP accounts: refused. [With them, no compute-budget instruction](https://explorer.solana.com/tx/3TY6Aobky4mcRjeHnRP8evdBuNQsk9yj5F9kZTTfbocsXkpfxC43PT9JCjKMjum2cKryHJb7FbGwsK6Fq2ssDHKv?cluster=devnet): charity +0.006284 SOL, passport vault +0. The normal `e2e` also passes on this binary.
+
+**Other changes**
+
+- **Events:** `CoinCreated`, `FeesCollected` (curve and LP), `ArtistClaimed`, `ArtistPaid`, `CharitySwept`.
+- **`escrow_base_account` is pinned to the escrow's ATA** in `collect_fees`, `collect_lp_fees`, `sweep_charity` and `claim_artist`. With the check removed from `sweep_charity`, Meteora accepted another coin's account there and the substitution test failed. Base-side fees are zero with riff's config, so this closes a route rather than a live loss.
+- **`create_coin` checks the artist ID format** the passport requires (`spotify:` + 22 alphanumerics). Before, a coin with any other ID could never be claimed, and all its artist fees would go to charity.
+
+**Transaction size.** The late claim on a graduated coin was 1239 bytes with a compute-budget instruction, over Solana's 1232 limit (LiteSVM doesn't enforce it). It uses about 96k compute units, under the 200k default, so it's sent without one and fits; a test asserts both. **It has no room for a priority-fee instruction** unless it moves to a v0 transaction with an address lookup table.
+
+**Tests added** (`tests/test_dbc.rs`, 21 in total, against Meteora's real programs): on-time claim after graduation; late claim after graduation (charity gets earlier LP fees, the artist only later ones); late claim with nothing left to collect; `pay_artist` after graduation; sweep and claim in both orders, and at the deadline second itself; launch buy with several swaps; `swap2` in the creation transaction; bad artist IDs; another coin's DAMM pool or positions, and swapped positions, in `collect_lp_fees`; passport recovery, revocation and reissue keeping the vault; events; **every account of every permissionless money instruction and of `claim_artist` swapped for another coin's, one at a time, must fail** (a deterministic stand-in for fuzzing the substitution paths).
+
+Passport recovery and reissue are simulated in these tests by rewriting the passport account; riff-passport's own tests cover those instructions.
+
+**Threat notes** per instruction go in the audit package (item 3).
+
+**Left:** real fuzzing is not done; that's a decision for the audit.

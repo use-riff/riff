@@ -13,7 +13,7 @@ Meteora runs the curve, trading and graduation. Launchpads built on DBC (Audius 
 | riff's DBC config | Created once with Meteora. Its fee claimer is riff's **fee authority** (a PDA of this program). |
 | `create_coin` | Creates the coin's Meteora pool with a per-coin **escrow** PDA as the pool creator, for good, and records the launcher, artist and claim deadline. The launcher's first buy can go in the same transaction, capped (see below). |
 | `collect_fees` | Anyone can call it. It claims this pool's partner share and splits it between the coin's launcher and riff's treasury, and moves the creator share into the coin's **artist vault**. |
-| `claim_artist` | The passport's wallet, co-signed by riff's verifier. The coin's artist becomes the **passport's vault**: the held fees are paid there in SOL. A late claim (after the window) sends what was held to charity; only later fees go to the artist. |
+| `claim_artist` | The passport's wallet, co-signed by riff's verifier. The coin's artist becomes the **passport's vault**: the held fees are paid there in SOL. A late claim (after the window) sends what was held to charity, including a graduated coin's uncollected LP fees; only later fees go to the artist. |
 | `pay_artist` | Anyone can call it. It pays a claimed coin's collected fees to the passport vault, in SOL. |
 | `sweep_charity` | After the claim window, while unclaimed, anyone can call it. It sends held artist fees to the charity wallet. |
 | `collect_lp_fees` | After graduation, anyone can call it. It collects the LP fees of the coin's two locked DAMM v2 positions: riff's side split with the launcher, the artist's side into the artist vault. |
@@ -56,6 +56,10 @@ There's no anti-sniping fee. Meteora's launch fee schedule only lets a buy in th
 - the artist claims with their passport (not another wallet, another artist's passport, a revoked passport or without riff's verifier), and the held fees and later fees arrive in the passport's vault as SOL;
 - unclaimed fees go to charity after the window; a late claim gets only fees from then on;
 - graduation to DAMM v2 gives one locked position to the escrow and one to the fee authority, and their LP fees follow the same routes, to charity too.
+- a claim after graduation gets the right fees: all of them on time, only those after the claim when late;
+- a sweep and a claim can't both take the same fees, in either order;
+- no account of an instruction can be swapped for another coin's, and another coin's DAMM accounts can't be used to collect LP fees;
+- a passport moved to a new wallet, revoked or reissued keeps its vault and coins.
 
 ```bash
 make dbc-fixtures   # downloads Meteora's programs (pinned hashes)
@@ -88,8 +92,8 @@ npm run devnet:status
 
 ## Limits and next steps
 
-1. **Late claims after graduation.** `claim_artist` collects the curve's held fees before deciding what goes to charity, but not uncollected LP fees: run `collect_lp_fees` before a late claim, or those go to the artist.
+1. **Late claims after graduation.** A late claim on a graduated coin also collects the creator position's LP fees for charity. Nothing on chain can tell the migration's position from a dust one handed to the escrow, so riff's verifier, which co-signs the claim, vouches for the position passed. It only fits a plain transaction without a compute-budget instruction (so no priority fee, unless it uses a lookup table).
 2. **Surplus.** The graduating buy fills the curve exactly, so Meteora's surplus is zero and this program doesn't collect it.
 3. **Admin.** The admin and the program's upgrade authority should be a multisig on mainnet.
 4. **App.** riffpad.fun needs to create coins, trade (through Meteora or Jupiter), run the cranks (`collect_fees`, `collect_lp_fees`, `pay_artist`, `sweep_charity`) and claim through riff-dbc.
-5. **Audit** before mainnet.
+5. **Audit** before mainnet. It hasn't happened.

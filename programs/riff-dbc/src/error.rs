@@ -34,4 +34,6 @@ pub enum RiffDbcError {
     MathOverflow,
     #[msg("Only the program's upgrade authority can initialize it")]
     NotUpgradeAuthority,
+    #[msg("A late claim on a graduated coin must collect its LP fees: pass the DAMM v2 accounts")]
+    LateClaimNeedsLpAccounts,
 }

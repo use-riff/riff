@@ -643,6 +643,7 @@ fn claim_artist_ix(
     vault: &Pubkey,
     verifier: &Pubkey,
     charity_account: Pubkey,
+    g: Option<&Graduated>,
 ) -> Instruction {
     Instruction {
         program_id: riff_dbc::ID,
@@ -669,6 +670,15 @@ fn claim_artist_ix(
             token_quote_program: TOKEN_PROGRAM_ID,
             token_base_program: TOKEN_2022_ID,
             system_program: system_program::ID,
+            damm_pool_authority: g.map(|_| DAMM_POOL_AUTHORITY),
+            damm_pool: g.map(|g| g.pool),
+            creator_position: g.map(|g| g.creator_position),
+            creator_position_nft_account: g.map(|g| g.creator_nft_account),
+            token_a_vault: g
+                .map(|g| damm_pda(&[b"token_vault", coin.mint.as_ref(), g.pool.as_ref()])),
+            token_b_vault: g.map(|g| damm_pda(&[b"token_vault", WSOL.as_ref(), g.pool.as_ref()])),
+            damm_event_authority: g.map(|_| damm_event_authority()),
+            damm_program: g.map(|_| damm::ID),
         }
         .to_account_metas(None),
         data: riff_dbc::instruction::ClaimArtist {}.data(),
@@ -677,6 +687,17 @@ fn claim_artist_ix(
 
 #[allow(clippy::result_large_err)]
 fn claim(env: &mut Env, coin: &CoinKeys, artist: &ArtistPassport) -> TransactionResult {
+    claim_with(env, coin, artist, None)
+}
+
+/// A claim; `g` passes the graduated pool's accounts, as a late claim needs.
+#[allow(clippy::result_large_err)]
+fn claim_with(
+    env: &mut Env,
+    coin: &CoinKeys,
+    artist: &ArtistPassport,
+    g: Option<&Graduated>,
+) -> TransactionResult {
     let charity = env.charity.insecure_clone();
     let charity_account = wsol_account(&mut env.svm, &charity, 0);
     let verifier = env.verifier.insecure_clone();
@@ -687,6 +708,7 @@ fn claim(env: &mut Env, coin: &CoinKeys, artist: &ArtistPassport) -> Transaction
         &artist.vault,
         &verifier.pubkey(),
         charity_account,
+        g,
     );
     send(&mut env.svm, &[ix], &[&artist.wallet, &verifier])
 }
@@ -1032,6 +1054,7 @@ fn the_artist_claims_with_their_passport_and_is_paid_in_sol() {
         &artist.vault,
         &impostor.pubkey(),
         charity_account,
+        None,
     );
     fails_with(
         send(&mut env.svm, &[ix], &[&artist.wallet, &impostor]),
@@ -1265,4 +1288,627 @@ fn only_the_admin_updates_the_config() {
         &[update(&admin.pubkey(), 5_000)],
         &[&admin],
     ));
+}
+
+// ------------------------------------------------------------ hardening
+
+/// The Anchor event of type `E` in a transaction's logs.
+fn event<E: anchor_lang::Event + AnchorDeserialize>(logs: &[String]) -> E {
+    use base64::Engine;
+    logs.iter()
+        .filter_map(|l| l.strip_prefix("Program data: "))
+        .filter_map(|b| base64::engine::general_purpose::STANDARD.decode(b).ok())
+        .find_map(|data| {
+            data.strip_prefix(E::DISCRIMINATOR)
+                .map(|rest| E::try_from_slice(rest).unwrap())
+        })
+        .expect("event not emitted")
+}
+
+/// Collects the graduated pool's LP fees, as the crank does.
+fn collect_lp(env: &mut Env, coin: &CoinKeys, g: &Graduated) {
+    let (launcher_account, treasury_account) = partner_accounts(env, coin);
+    let admin = env.admin.insecure_clone();
+    ok(send(
+        &mut env.svm,
+        &[
+            compute_budget(400_000),
+            collect_lp_fees_ix(coin, g, launcher_account, treasury_account),
+        ],
+        &[&admin],
+    ));
+}
+
+fn pay_artist(env: &mut Env, coin: &CoinKeys, vault: &Pubkey) {
+    let cranker = funded(&mut env.svm);
+    ok(send(
+        &mut env.svm,
+        &[pay_artist_ix(coin, &cranker.pubkey(), vault)],
+        &[&cranker],
+    ));
+}
+
+/// Moves a passport to a new wallet, as riff-passport's recovery and reissue
+/// do (that program's tests cover those): only the passport account changes.
+fn move_passport(env: &mut Env, artist: &ArtistPassport, revoked: bool) -> Keypair {
+    let wallet = funded(&mut env.svm);
+    let mut account = env.svm.get_account(&artist.passport).unwrap();
+    let mut passport: riff_passport::Passport =
+        anchor_lang::AccountDeserialize::try_deserialize(&mut &account.data[..]).unwrap();
+    passport.wallet = wallet.pubkey();
+    passport.revoked = revoked;
+    let mut data = Vec::new();
+    passport.try_serialize(&mut data).unwrap();
+    account.data = data;
+    env.svm.set_account(artist.passport, account).unwrap();
+    wallet
+}
+
+#[test]
+fn an_on_time_claim_after_graduation_gets_everything() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let g = graduate(&mut env, &coin);
+    buy_on_damm(&mut env, &coin, &g, 10 * SOL);
+    let artist = passport(&mut env, ARTIST_ID, false);
+    let before = lamports(&env.svm, &artist.vault);
+
+    // Within the window the claim needs no DAMM accounts: nothing is at stake.
+    ok(claim(&mut env, &coin, &artist));
+    let curve_share = lamports(&env.svm, &artist.vault) - before;
+    assert!(curve_share > 72 * SOL * 80 / 10_000 / 2, "{curve_share}");
+
+    // LP fees earned before the claim still reach the artist.
+    collect_lp(&mut env, &coin, &g);
+    let before = lamports(&env.svm, &artist.vault);
+    pay_artist(&mut env, &coin, &artist.vault);
+    assert!(lamports(&env.svm, &artist.vault) - before > 10 * SOL / 1_000);
+    assert_eq!(token_balance(&env.svm, &artist_vault(&coin.mint)), 0);
+}
+
+#[test]
+fn a_late_claim_after_graduation_leaves_earlier_lp_fees_to_charity() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let g = graduate(&mut env, &coin);
+    buy_on_damm(&mut env, &coin, &g, 10 * SOL);
+    let artist = passport(&mut env, ARTIST_ID, false);
+    advance(&mut env.svm, CLAIM_WINDOW_SECS + 1);
+
+    // Skipping the LP fees isn't possible.
+    fails_with(claim(&mut env, &coin, &artist), "LateClaimNeedsLpAccounts");
+
+    let (launcher_account, treasury_account) = partner_accounts(&mut env, &coin);
+    let charity = env.charity.insecure_clone();
+    let charity_account = wsol_account(&mut env.svm, &charity, 0);
+    let vault_before = lamports(&env.svm, &artist.vault);
+
+    // The largest claim fits a plain transaction (1232 bytes) only without a
+    // compute-budget instruction, which its compute use lets it skip.
+    let verifier = env.verifier.pubkey();
+    let msg = Message::new_with_blockhash(
+        &[claim_artist_ix(
+            &coin,
+            &artist.wallet.pubkey(),
+            &artist.passport,
+            &artist.vault,
+            &verifier,
+            charity_account,
+            Some(&g),
+        )],
+        Some(&artist.wallet.pubkey()),
+        &env.svm.latest_blockhash(),
+    );
+    let size = 1 + 2 * 64 + VersionedMessage::Legacy(msg).serialize().len();
+    assert!(size <= 1232, "late claim is {size} bytes");
+
+    let res = claim_with(&mut env, &coin, &artist, Some(&g)).unwrap();
+    assert!(
+        res.compute_units_consumed < 200_000,
+        "late claim used {} compute units",
+        res.compute_units_consumed
+    );
+    assert_eq!(lamports(&env.svm, &artist.vault), vault_before);
+    assert!(
+        token_balance(&env.svm, &charity_account) > 10 * SOL / 1_000,
+        "charity got the curve's share and the LP fees"
+    );
+
+    // The artist's side earns from the claim on, riff's side all along: 5 of
+    // the 15 SOL traded on the graduated pool count for the artist.
+    buy_on_damm(&mut env, &coin, &g, 5 * SOL);
+    let partner_before =
+        token_balance(&env.svm, &launcher_account) + token_balance(&env.svm, &treasury_account);
+    collect_lp(&mut env, &coin, &g);
+    let partner_lp = token_balance(&env.svm, &launcher_account)
+        + token_balance(&env.svm, &treasury_account)
+        - partner_before;
+    pay_artist(&mut env, &coin, &artist.vault);
+    let artist_lp = lamports(&env.svm, &artist.vault) - vault_before;
+    assert_close(
+        artist_lp * 3,
+        partner_lp,
+        "artist's LP fees are only later ones",
+    );
+}
+
+#[test]
+fn a_late_claim_with_no_lp_fees_left_still_works() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let g = graduate(&mut env, &coin);
+    buy_on_damm(&mut env, &coin, &g, SOL);
+    collect_lp(&mut env, &coin, &g);
+    let artist = passport(&mut env, ARTIST_ID, false);
+    advance(&mut env.svm, CLAIM_WINDOW_SECS + 1);
+    ok(claim_with(&mut env, &coin, &artist, Some(&g)));
+    assert_eq!(coin_record(&env.svm, &coin.mint).artist, Some(artist.vault));
+}
+
+#[test]
+fn sweeping_and_claiming_cant_both_take_the_same_fees() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let artist = passport(&mut env, ARTIST_ID, false);
+    let charity = env.charity.insecure_clone();
+    let charity_account = wsol_account(&mut env.svm, &charity, 0);
+    let admin = env.admin.insecure_clone();
+    buy_on_meteora(&mut env, &coin, 10 * SOL);
+
+    // At the deadline itself the artist is still on time: no sweep, full pay.
+    advance(&mut env.svm, CLAIM_WINDOW_SECS);
+    fails_with(
+        send(
+            &mut env.svm,
+            &[sweep_charity_ix(&coin, charity_account)],
+            &[&admin],
+        ),
+        "ClaimWindowOpen",
+    );
+    let before = lamports(&env.svm, &artist.vault);
+    ok(claim(&mut env, &coin, &artist));
+    assert_close(
+        lamports(&env.svm, &artist.vault) - before,
+        10 * SOL * 80 / 10_000,
+        "on time at the deadline",
+    );
+    fails_with(
+        send(
+            &mut env.svm,
+            &[sweep_charity_ix(&coin, charity_account)],
+            &[&admin],
+        ),
+        "AlreadyClaimed",
+    );
+    assert_eq!(token_balance(&env.svm, &charity_account), 0);
+
+    // One second later, the sweep goes first: the claim finds nothing held.
+    let coin = create_coin(&mut env);
+    let deadline = coin_record(&env.svm, &coin.mint).claim_deadline;
+    buy_on_meteora(&mut env, &coin, 10 * SOL);
+    let now = env.svm.get_sysvar::<Clock>().unix_timestamp;
+    advance(&mut env.svm, deadline - now + 1);
+    ok(send(
+        &mut env.svm,
+        &[sweep_charity_ix(&coin, charity_account)],
+        &[&admin],
+    ));
+    let swept = token_balance(&env.svm, &charity_account);
+    assert_close(swept, 10 * SOL * 80 / 10_000, "swept");
+    let before = lamports(&env.svm, &artist.vault);
+    ok(claim(&mut env, &coin, &artist));
+    assert_eq!(lamports(&env.svm, &artist.vault), before);
+    assert_eq!(token_balance(&env.svm, &charity_account), swept);
+}
+
+/// Creates a coin with these Meteora buys (lamports, partial) in the same
+/// transaction.
+#[allow(clippy::result_large_err)]
+fn create_with_buys(env: &mut Env, buys: &[(u64, bool)]) -> TransactionResult {
+    let launcher = funded(&mut env.svm);
+    let mint = Keypair::new();
+    let m = mint.pubkey();
+    let (hi, lo) = sorted(m, WSOL);
+    let pool = dbc_pda(&[b"pool", env.dbc_config.as_ref(), hi.as_ref(), lo.as_ref()]);
+    let keys = CoinKeys {
+        launcher: launcher.insecure_clone(),
+        mint: m,
+        pool,
+        base_vault: dbc_pda(&[b"token_vault", m.as_ref(), pool.as_ref()]),
+        quote_vault: dbc_pda(&[b"token_vault", WSOL.as_ref(), pool.as_ref()]),
+    };
+    let total = buys.iter().map(|b| b.0).sum();
+    let mut ixs = vec![
+        compute_budget(900_000),
+        create_coin_ix(env, &launcher.pubkey(), &m),
+    ];
+    ixs.extend(wrap_ixs(&launcher.pubkey(), total));
+    for (lamports, partial) in buys {
+        ixs.extend(buy_ixs(env, &keys, &launcher.pubkey(), *lamports, *partial));
+    }
+    send(&mut env.svm, &ixs, &[&launcher, &mint])
+}
+
+#[test]
+fn the_launch_buy_cap_covers_all_the_swaps_together() {
+    let mut env = setup();
+    ok(create_with_buys(
+        &mut env,
+        &[(SOL / 2, false), (SOL / 2, false)],
+    ));
+    fails_with(
+        create_with_buys(&mut env, &[(SOL / 2, false), (SOL / 2 + 1, false)]),
+        "LaunchBuyTooLarge",
+    );
+}
+
+#[test]
+fn swap2_cant_go_with_a_coins_creation() {
+    let mut env = setup();
+    fails_with(
+        create_with_buys(&mut env, &[(SOL / 2, true)]),
+        "LaunchBuyNotSwap",
+    );
+    // Not even next to a plain swap.
+    fails_with(
+        create_with_buys(&mut env, &[(SOL / 4, false), (SOL / 4, true)]),
+        "LaunchBuyNotSwap",
+    );
+}
+
+#[test]
+fn a_coin_needs_an_artist_id_a_passport_could_have() {
+    let mut env = setup();
+    let launcher = funded(&mut env.svm);
+    for artist_id in ["", "spotify:short", "youtube:0LilaMossDemoArtist000"] {
+        let mint = Keypair::new();
+        let mut ix = create_coin_ix(&env, &launcher.pubkey(), &mint.pubkey());
+        ix.data = riff_dbc::instruction::CreateCoin {
+            args: riff_dbc::CreateCoinArgs {
+                name: "Moss Garden".into(),
+                symbol: "MOSS".into(),
+                uri: "https://riffpad.fun/meta/moss.json".into(),
+                artist_id: artist_id.into(),
+                artist_name: "Lila Moss".into(),
+            },
+        }
+        .data();
+        fails_with(
+            send(
+                &mut env.svm,
+                &[compute_budget(600_000), ix],
+                &[&launcher, &mint],
+            ),
+            "InvalidArtistId",
+        );
+    }
+}
+
+#[test]
+fn another_coins_damm_accounts_cant_be_used_to_collect_lp_fees() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let other = create_coin(&mut env);
+    let g = graduate(&mut env, &coin);
+    let o = graduate(&mut env, &other);
+    buy_on_damm(&mut env, &other, &o, 10 * SOL);
+    let (launcher_account, treasury_account) = partner_accounts(&mut env, &coin);
+    let admin = env.admin.insecure_clone();
+
+    let mut attempt = |edit: &dyn Fn(&mut riff_dbc::accounts::CollectLpFees)| {
+        let mut accounts = riff_dbc::accounts::CollectLpFees {
+            config: pda(&[riff_dbc::CONFIG_SEED]),
+            coin: coin_pda(&coin.mint),
+            escrow: escrow(&coin.mint),
+            fee_authority: pda(&[riff_dbc::FEE_AUTHORITY_SEED]),
+            fees_vault: pda(&[riff_dbc::FEES_VAULT_SEED]),
+            artist_vault: artist_vault(&coin.mint),
+            escrow_base_account: ata(&escrow(&coin.mint), &coin.mint, &TOKEN_2022_ID),
+            launcher_quote_account: launcher_account,
+            treasury_quote_account: treasury_account,
+            damm_pool_authority: DAMM_POOL_AUTHORITY,
+            damm_pool: g.pool,
+            creator_position: g.creator_position,
+            creator_position_nft_account: g.creator_nft_account,
+            partner_position: g.partner_position,
+            partner_position_nft_account: g.partner_nft_account,
+            token_a_vault: damm_pda(&[b"token_vault", coin.mint.as_ref(), g.pool.as_ref()]),
+            token_b_vault: damm_pda(&[b"token_vault", WSOL.as_ref(), g.pool.as_ref()]),
+            base_mint: coin.mint,
+            quote_mint: WSOL,
+            damm_event_authority: damm_event_authority(),
+            damm_program: damm::ID,
+            token_quote_program: TOKEN_PROGRAM_ID,
+            token_base_program: TOKEN_2022_ID,
+        };
+        edit(&mut accounts);
+        let ix = Instruction {
+            program_id: riff_dbc::ID,
+            accounts: accounts.to_account_metas(None),
+            data: riff_dbc::instruction::CollectLpFees {}.data(),
+        };
+        send(&mut env.svm, &[compute_budget(400_000), ix], &[&admin])
+    };
+
+    // The whole other pool, to pay this coin's launcher with its fees.
+    let other_pool = |a: &mut riff_dbc::accounts::CollectLpFees| {
+        a.damm_pool = o.pool;
+        a.creator_position = o.creator_position;
+        a.creator_position_nft_account = o.creator_nft_account;
+        a.partner_position = o.partner_position;
+        a.partner_position_nft_account = o.partner_nft_account;
+        a.token_a_vault = damm_pda(&[b"token_vault", other.mint.as_ref(), o.pool.as_ref()]);
+        a.token_b_vault = damm_pda(&[b"token_vault", WSOL.as_ref(), o.pool.as_ref()]);
+    };
+    attempt(&other_pool).expect_err("another coin's pool");
+    // Only its partner position, or only its creator position.
+    attempt(&|a| {
+        a.partner_position = o.partner_position;
+        a.partner_position_nft_account = o.partner_nft_account;
+    })
+    .expect_err("another coin's partner position");
+    attempt(&|a| {
+        a.creator_position = o.creator_position;
+        a.creator_position_nft_account = o.creator_nft_account;
+    })
+    .expect_err("another coin's creator position");
+    // The two positions swapped: each is only its owner's to claim.
+    attempt(&|a| {
+        a.creator_position = g.partner_position;
+        a.creator_position_nft_account = g.partner_nft_account;
+        a.partner_position = g.creator_position;
+        a.partner_position_nft_account = g.creator_nft_account;
+    })
+    .expect_err("swapped positions");
+    // The right accounts are fine, and the other coin's fees are still there.
+    attempt(&|_| {}).unwrap();
+    let held = artist_vault(&other.mint);
+    let before = token_balance(&env.svm, &held);
+    collect_lp(&mut env, &other, &o);
+    assert!(token_balance(&env.svm, &held) - before > 10 * SOL / 1_000);
+}
+
+#[test]
+fn a_passport_moved_to_a_new_wallet_keeps_its_vault_and_coins() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let artist = passport(&mut env, ARTIST_ID, false);
+    ok(claim(&mut env, &coin, &artist));
+
+    // Recovery: the same vault keeps being paid, and only the new wallet
+    // can claim the artist's next coin.
+    let new_wallet = move_passport(&mut env, &artist, false);
+    let vault_address = passport_pda(&[riff_passport::VAULT_SEED, artist.passport.as_ref()]);
+    assert_eq!(vault_address, artist.vault);
+    buy_on_meteora(&mut env, &coin, 5 * SOL);
+    collect(&mut env, &coin);
+    let before = lamports(&env.svm, &artist.vault);
+    pay_artist(&mut env, &coin, &artist.vault);
+    assert_close(
+        lamports(&env.svm, &artist.vault) - before,
+        5 * SOL * 80 / 10_000,
+        "paid after recovery",
+    );
+    let next = create_coin(&mut env);
+    let old = ArtistPassport {
+        wallet: artist.wallet.insecure_clone(),
+        passport: artist.passport,
+        vault: artist.vault,
+    };
+    fails_with(claim(&mut env, &next, &old), "NotPassportWallet");
+    let recovered = ArtistPassport {
+        wallet: new_wallet,
+        passport: artist.passport,
+        vault: artist.vault,
+    };
+    ok(claim(&mut env, &next, &recovered));
+
+    // Revoked: no claims, but claimed coins still pay the vault, where
+    // nothing can leave until riff reissues the passport.
+    let third = create_coin(&mut env);
+    let revoked_wallet = move_passport(&mut env, &artist, true);
+    let revoked = ArtistPassport {
+        wallet: revoked_wallet,
+        passport: artist.passport,
+        vault: artist.vault,
+    };
+    fails_with(claim(&mut env, &third, &revoked), "PassportRevoked");
+    buy_on_meteora(&mut env, &coin, 5 * SOL);
+    collect(&mut env, &coin);
+    pay_artist(&mut env, &coin, &artist.vault);
+
+    // Reissued to the real artist: same passport, same vault.
+    let reissued = ArtistPassport {
+        wallet: move_passport(&mut env, &artist, false),
+        passport: artist.passport,
+        vault: artist.vault,
+    };
+    ok(claim(&mut env, &third, &reissued));
+    assert_eq!(
+        coin_record(&env.svm, &third.mint).artist,
+        Some(artist.vault)
+    );
+    assert_eq!(coin_record(&env.svm, &coin.mint).artist, Some(artist.vault));
+}
+
+/// Replaces each account of `ix` that differs from `other`'s, one at a time,
+/// and expects each transaction to fail.
+fn substitutions_fail(
+    env: &mut Env,
+    ix: &Instruction,
+    other: &Instruction,
+    signers: &[&Keypair],
+    what: &str,
+) {
+    assert_eq!(ix.accounts.len(), other.accounts.len());
+    let mut tried = 0;
+    for i in 0..ix.accounts.len() {
+        if ix.accounts[i].pubkey == other.accounts[i].pubkey {
+            continue;
+        }
+        let mut bad = ix.clone();
+        bad.accounts[i].pubkey = other.accounts[i].pubkey;
+        tried += 1;
+        assert!(
+            send(&mut env.svm, &[compute_budget(1_000_000), bad], signers).is_err(),
+            "{what}: account {i} accepted another coin's {}",
+            other.accounts[i].pubkey
+        );
+    }
+    assert!(tried > 3, "{what}: only {tried} accounts differ");
+}
+
+#[test]
+fn no_account_can_be_swapped_for_another_coins() {
+    let mut env = setup();
+    let (a, b) = (create_coin(&mut env), create_coin(&mut env));
+    let (ga, gb) = (graduate(&mut env, &a), graduate(&mut env, &b));
+    buy_on_damm(&mut env, &a, &ga, SOL);
+    buy_on_damm(&mut env, &b, &gb, SOL);
+    let (launcher_a, treasury) = partner_accounts(&mut env, &a);
+    let (launcher_b, _) = partner_accounts(&mut env, &b);
+    let admin = env.admin.insecure_clone();
+    let charity = env.charity.insecure_clone();
+    let charity_account = wsol_account(&mut env.svm, &charity, 0);
+    let artist = passport(&mut env, ARTIST_ID, false);
+    let verifier = env.verifier.insecure_clone();
+
+    let (ix, other) = (
+        collect_fees_ix(env.dbc_config, &a, launcher_a, treasury),
+        collect_fees_ix(env.dbc_config, &b, launcher_b, treasury),
+    );
+    substitutions_fail(&mut env, &ix, &other, &[&admin], "collect_fees");
+    let (ix, other) = (
+        collect_lp_fees_ix(&a, &ga, launcher_a, treasury),
+        collect_lp_fees_ix(&b, &gb, launcher_b, treasury),
+    );
+    substitutions_fail(&mut env, &ix, &other, &[&admin], "collect_lp_fees");
+
+    advance(&mut env.svm, CLAIM_WINDOW_SECS + 1);
+    let (ix, other) = (
+        sweep_charity_ix(&a, charity_account),
+        sweep_charity_ix(&b, charity_account),
+    );
+    substitutions_fail(&mut env, &ix, &other, &[&admin], "sweep_charity");
+    let claim_of = |coin: &CoinKeys, g: &Graduated| {
+        claim_artist_ix(
+            coin,
+            &artist.wallet.pubkey(),
+            &artist.passport,
+            &artist.vault,
+            &verifier.pubkey(),
+            charity_account,
+            Some(g),
+        )
+    };
+    let (ix, other) = (claim_of(&a, &ga), claim_of(&b, &gb));
+    substitutions_fail(
+        &mut env,
+        &ix,
+        &other,
+        &[&artist.wallet, &verifier],
+        "claim_artist",
+    );
+
+    ok(claim_with(&mut env, &a, &artist, Some(&ga)));
+    ok(claim_with(&mut env, &b, &artist, Some(&gb)));
+    let cranker = funded(&mut env.svm);
+    let (ix, other) = (
+        pay_artist_ix(&a, &cranker.pubkey(), &artist.vault),
+        pay_artist_ix(&b, &cranker.pubkey(), &artist.vault),
+    );
+    substitutions_fail(&mut env, &ix, &other, &[&cranker], "pay_artist");
+}
+
+#[test]
+fn every_money_move_emits_an_event() {
+    use riff_dbc::events::*;
+    let mut env = setup();
+    let launcher = funded(&mut env.svm);
+    let mint = Keypair::new();
+    let ix = create_coin_ix(&env, &launcher.pubkey(), &mint.pubkey());
+    let res = send(
+        &mut env.svm,
+        &[compute_budget(600_000), ix],
+        &[&launcher, &mint],
+    )
+    .unwrap();
+    let created: CoinCreated = event(&res.logs);
+    assert_eq!(created.mint, mint.pubkey());
+    assert_eq!(created.launcher, launcher.pubkey());
+    assert_eq!(created.artist_id, ARTIST_ID);
+
+    let coin = create_coin(&mut env);
+    buy_on_meteora(&mut env, &coin, 10 * SOL);
+    let (launcher_account, treasury_account) = partner_accounts(&mut env, &coin);
+    let admin = env.admin.insecure_clone();
+    let res = send(
+        &mut env.svm,
+        &[collect_fees_ix(
+            env.dbc_config,
+            &coin,
+            launcher_account,
+            treasury_account,
+        )],
+        &[&admin],
+    )
+    .unwrap();
+    let fees: FeesCollected = event(&res.logs);
+    assert!(!fees.lp);
+    assert_eq!(fees.to_launcher, token_balance(&env.svm, &launcher_account));
+    assert_eq!(fees.to_treasury, token_balance(&env.svm, &treasury_account));
+    assert_eq!(
+        fees.to_artist_vault,
+        token_balance(&env.svm, &artist_vault(&coin.mint))
+    );
+
+    let artist = passport(&mut env, ARTIST_ID, false);
+    let res = claim(&mut env, &coin, &artist).unwrap();
+    let claimed: ArtistClaimed = event(&res.logs);
+    assert!(!claimed.late);
+    assert_eq!(claimed.paid_to_artist, fees.to_artist_vault);
+    assert_eq!(claimed.sent_to_charity, 0);
+    assert_eq!(claimed.passport_vault, artist.vault);
+
+    buy_on_meteora(&mut env, &coin, SOL);
+    collect(&mut env, &coin);
+    let held = token_balance(&env.svm, &artist_vault(&coin.mint));
+    let cranker = funded(&mut env.svm);
+    let res = send(
+        &mut env.svm,
+        &[pay_artist_ix(&coin, &cranker.pubkey(), &artist.vault)],
+        &[&cranker],
+    )
+    .unwrap();
+    let paid: ArtistPaid = event(&res.logs);
+    assert_eq!(paid.amount, held);
+
+    let unclaimed = create_coin(&mut env);
+    buy_on_meteora(&mut env, &unclaimed, SOL);
+    advance(&mut env.svm, CLAIM_WINDOW_SECS + 1);
+    let charity = env.charity.insecure_clone();
+    let charity_account = wsol_account(&mut env.svm, &charity, 0);
+    let res = send(
+        &mut env.svm,
+        &[sweep_charity_ix(&unclaimed, charity_account)],
+        &[&admin],
+    )
+    .unwrap();
+    let swept: CharitySwept = event(&res.logs);
+    assert_eq!(swept.amount, token_balance(&env.svm, &charity_account));
+
+    let g = graduate(&mut env, &coin);
+    buy_on_damm(&mut env, &coin, &g, SOL);
+    let res = send(
+        &mut env.svm,
+        &[
+            compute_budget(400_000),
+            collect_lp_fees_ix(&coin, &g, launcher_account, treasury_account),
+        ],
+        &[&admin],
+    )
+    .unwrap();
+    let lp: FeesCollected = event(&res.logs);
+    assert!(lp.lp);
+    assert!(lp.to_artist_vault > 0);
 }

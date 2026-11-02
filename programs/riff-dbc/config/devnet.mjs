@@ -6,6 +6,7 @@
 //                           # (--no-claim: without the passport steps)
 //   node devnet.mjs status  # what's deployed
 //                           # (the claim steps issue a test passport, then reset it)
+//   node devnet.mjs e2e --late   # a late claim on a graduated coin
 //   node devnet.mjs reset-passport  # if an e2e stopped before its reset
 //
 // Keys come from ~/.config/riff/devnet (never the repo): deployer.json is
@@ -83,8 +84,10 @@ const sol = (lamports) => (Number(lamports) / LAMPORTS_PER_SOL).toFixed(6);
 const sorted = (a, c) => (Buffer.compare(a.toBuffer(), c.toBuffer()) > 0 ? [a, c] : [c, a]);
 const link = (sig) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
 
-async function send(ixs, signers, what) {
-  const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1_000_000 }), ...ixs);
+async function send(ixs, signers, what, { budget = true } = {}) {
+  const tx = new Transaction();
+  if (budget) tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 1_000_000 }));
+  tx.add(...ixs);
   tx.feePayer = signers[0].publicKey;
   const sig = await provider.connection.sendTransaction(tx, signers);
   const { value } = await connection.confirmTransaction(sig, "confirmed");
@@ -282,7 +285,6 @@ async function withdrawFromVault(lamports) {
   const config = await passportProgram.account.passportConfig.fetch(passportConfigPda);
   const issuedAt = (await passportProgram.account.passport.fetch(passportPda)).issuedAt.toNumber();
   // The chain's clock, not this machine's: they can be minutes apart.
-  const chainNow = async () => connection.getBlockTime(await connection.getSlot());
   const settledAt = issuedAt + config.recoveryDelay.toNumber();
   if ((await chainNow()) < settledAt) console.log(`  waiting for the passport's probation to end (${settledAt - (await chainNow())}s on chain)`);
   while ((await chainNow()) < settledAt + 2) await new Promise((r) => setTimeout(r, 10_000));
@@ -424,18 +426,7 @@ async function positionOf(owner, dammPool) {
   throw new Error(`no DAMM v2 position in ${dammPool} held by ${owner}`);
 }
 
-async function e2e() {
-  const config = await riff.account.config.fetch(configPda);
-  const verifier = key("verifier.json");
-  const artistWallet = key("rehearsal/e2e-trader.json");
-  const passport = passportPda;
-  const passportVault = passportVaultPda;
-  if (!config.verifier.equals(verifier.publicKey)) throw new Error("verifier.json isn't riff-dbc's verifier");
-
-  // Receiving WSOL accounts: launcher (the deployer here), treasury, charity.
-  await send([...wrap(deployer.publicKey, 0), ...wrap(config.treasury, 0), ...wrap(config.charity, 0)], [deployer], "WSOL accounts");
-
-  console.log("\n1. Launch, with the launcher's capped first buy in the same transaction");
+async function launch(config) {
   const mintKp = Keypair.generate();
   const c = coinKeys(config.dbcConfig, mintKp.publicKey);
   const create = await riff.methods
@@ -482,40 +473,12 @@ async function e2e() {
   );
   console.log(`  coin ${c.mint}, pool ${c.pool}`);
   console.log(`  launcher holds ${(await tokenAmount(launcherBase)) / 1_000_000n} tokens`);
+  return { c, launcherBase };
+}
 
-  console.log("\n2. A trade straight on Meteora, then the fee crank");
-  await buy(config.dbcConfig, c, deployer, 0.1 * LAMPORTS_PER_SOL);
-  await collectFees(config, c, deployer.publicKey);
-  console.log(`  artist share held: ${sol(await tokenAmount(c.artistVault))} SOL`);
-
-  const claiming = !process.argv.includes("--no-claim");
-  if (claiming) {
-  console.log("\n3. The artist claims with their passport");
-  await issuePassport();
-  const vaultBefore = await connection.getBalance(passportVault);
-  const claim = await riff.methods
-    .claimArtist()
-    .accountsStrict({
-      wallet: artistWallet.publicKey,
-      verifier: verifier.publicKey,
-      config: configPda,
-      coin: c.coin,
-      passport,
-      passportVault,
-      escrow: c.escrow,
-      artistVault: c.artistVault,
-      unwrap: c.unwrap,
-      escrowBaseAccount: c.escrowBase,
-      charityQuoteAccount: wsolOf(config.charity),
-      ...poolAccounts(config.dbcConfig, c),
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-  await send([claim], [artistWallet, verifier], "claim_artist");
-  console.log(`  passport vault +${sol((await connection.getBalance(passportVault)) - vaultBefore)} SOL`);
-  }
-
-  console.log("\n4. Graduation: buy out the curve, migrate to DAMM v2");
+/// Buys out the curve and migrates the pool to DAMM v2, unless Meteora's
+/// keeper got there first. Returns the graduated pool's accounts.
+async function graduate(config, c) {
   await buy(config.dbcConfig, c, deployer, 0.8 * LAMPORTS_PER_SOL, true);
   const dammPool = pda([b("pool"), DAMM_CONFIG.toBuffer(), ...sorted(c.mint, NATIVE_MINT).map((k) => k.toBuffer())], DAMM);
   if (!(await connection.getAccountInfo(dammPool))) {
@@ -529,19 +492,25 @@ async function e2e() {
   const creator = await positionOf(c.escrow, dammPool);
   const partner = await positionOf(feeAuthority, dammPool);
   console.log(`  DAMM v2 pool ${dammPool}; creator position ${creator.position}, partner position ${partner.position}`);
+  return {
+    dammPool,
+    creator,
+    partner,
+    tokenAVault: pda([b("token_vault"), c.mint.toBuffer(), dammPool.toBuffer()], DAMM),
+    tokenBVault: pda([b("token_vault"), NATIVE_MINT.toBuffer(), dammPool.toBuffer()], DAMM),
+  };
+}
 
-  console.log("\n5. A trade on the graduated pool, LP fees, and the artist's payout");
-  const tokenAVault = pda([b("token_vault"), c.mint.toBuffer(), dammPool.toBuffer()], DAMM);
-  const tokenBVault = pda([b("token_vault"), NATIVE_MINT.toBuffer(), dammPool.toBuffer()], DAMM);
+async function buyOnDamm(c, g, launcherBase, lamports) {
   const swap = await damm.methods
-    .swap({ amountIn: new BN(0.1 * LAMPORTS_PER_SOL), minimumAmountOut: new BN(0) })
+    .swap({ amountIn: new BN(lamports), minimumAmountOut: new BN(0) })
     .accountsStrict({
       poolAuthority: DAMM_POOL_AUTHORITY,
-      pool: dammPool,
+      pool: g.dammPool,
       inputTokenAccount: wsolOf(deployer.publicKey),
       outputTokenAccount: launcherBase,
-      tokenAVault,
-      tokenBVault,
+      tokenAVault: g.tokenAVault,
+      tokenBVault: g.tokenBVault,
       tokenAMint: c.mint,
       tokenBMint: NATIVE_MINT,
       payer: deployer.publicKey,
@@ -552,7 +521,134 @@ async function e2e() {
       program: DAMM,
     })
     .instruction();
-  await send([...wrap(deployer.publicKey, 0.1 * LAMPORTS_PER_SOL), swap], [deployer], "buy 0.1 SOL on DAMM v2");
+  await send([...wrap(deployer.publicKey, lamports), swap], [deployer], `buy ${sol(lamports)} SOL on DAMM v2`);
+}
+
+/// claim_artist, with the graduated pool's accounts if `g` (a late claim
+/// needs them).
+function claimIx(config, c, wallet, verifier, g = null) {
+  return riff.methods
+    .claimArtist()
+    .accountsStrict({
+      wallet: wallet.publicKey,
+      verifier: verifier.publicKey,
+      config: configPda,
+      coin: c.coin,
+      passport: passportPda,
+      passportVault: passportVaultPda,
+      escrow: c.escrow,
+      artistVault: c.artistVault,
+      unwrap: c.unwrap,
+      escrowBaseAccount: c.escrowBase,
+      charityQuoteAccount: wsolOf(config.charity),
+      ...poolAccounts(config.dbcConfig, c),
+      systemProgram: SystemProgram.programId,
+      dammPoolAuthority: g && DAMM_POOL_AUTHORITY,
+      dammPool: g && g.dammPool,
+      creatorPosition: g && g.creator.position,
+      creatorPositionNftAccount: g && g.creator.nftAccount,
+      tokenAVault: g && g.tokenAVault,
+      tokenBVault: g && g.tokenBVault,
+      dammEventAuthority: g && dammEventAuthority,
+      dammProgram: g && DAMM,
+    })
+    .instruction();
+}
+
+const chainNow = async () => connection.getBlockTime(await connection.getSlot());
+
+/// A late claim on a graduated coin, on a real validator: what was held and
+/// the LP fees earned so far go to charity. The coin gets a 2-minute claim
+/// window, set just for its creation.
+async function e2eLate() {
+  const config = await riff.account.config.fetch(configPda);
+  const verifier = key("verifier.json");
+  const artistWallet = key("rehearsal/e2e-trader.json");
+  const update = (claimWindowSecs) =>
+    riff.methods
+      .updateConfig({
+        admin: config.admin,
+        verifier: config.verifier,
+        charity: config.charity,
+        treasury: config.treasury,
+        launcherShareBps: config.launcherShareBps,
+        maxLaunchBuy: config.maxLaunchBuy,
+        claimWindowSecs,
+      })
+      .accountsStrict({ admin: deployer.publicKey, config: configPda })
+      .instruction();
+  await send([...wrap(deployer.publicKey, 0), ...wrap(config.treasury, 0), ...wrap(config.charity, 0)], [deployer], "WSOL accounts");
+
+  console.log("\n1. A coin with a 2-minute claim window");
+  await send([await update(new BN(120))], [deployer], "claim window: 2 minutes");
+  let launched;
+  try {
+    launched = await launch(config);
+  } finally {
+    await send([await update(config.claimWindowSecs)], [deployer], "claim window restored");
+  }
+  const { c, launcherBase } = launched;
+
+  console.log("\n2. It graduates and trades on DAMM v2; nobody collects its LP fees");
+  const g = await graduate(config, c);
+  await buyOnDamm(c, g, launcherBase, 0.1 * LAMPORTS_PER_SOL);
+
+  console.log("\n3. The window ends; the artist claims late");
+  const { claimDeadline } = await riff.account.coin.fetch(c.coin);
+  while ((await chainNow()) <= claimDeadline.toNumber() + 1) await new Promise((r) => setTimeout(r, 10_000));
+  await issuePassport();
+  try {
+    const refused = await send([await claimIx(config, c, artistWallet, verifier)], [artistWallet, verifier], "claim without the LP accounts", { budget: false }).catch((e) => e);
+    if (!String(refused?.message ?? refused).includes("LateClaimNeedsLpAccounts") && !refused?.transactionLogs?.join("").includes("LateClaimNeedsLpAccounts"))
+      throw new Error(`a late claim without the LP accounts should be refused: ${refused}`);
+    console.log("  without the LP accounts: refused (LateClaimNeedsLpAccounts)");
+
+    const [charityBefore, vaultBefore] = [await tokenAmount(wsolOf(config.charity)), await connection.getBalance(passportVaultPda)];
+    await send([await claimIx(config, c, artistWallet, verifier, g)], [artistWallet, verifier], "late claim_artist (no compute-budget instruction)", { budget: false });
+    const toCharity = (await tokenAmount(wsolOf(config.charity))) - charityBefore;
+    const vaultGain = (await connection.getBalance(passportVaultPda)) - vaultBefore;
+    console.log(`  charity +${sol(toCharity)} SOL, passport vault +${sol(vaultGain)} SOL`);
+    if (vaultGain !== 0 || toCharity === 0n) throw new Error("the charity should get it all");
+  } finally {
+    await resetPassport();
+  }
+}
+
+async function e2e() {
+  if (process.argv.includes("--late")) return e2eLate();
+  const config = await riff.account.config.fetch(configPda);
+  const verifier = key("verifier.json");
+  const artistWallet = key("rehearsal/e2e-trader.json");
+  const passportVault = passportVaultPda;
+  if (!config.verifier.equals(verifier.publicKey)) throw new Error("verifier.json isn't riff-dbc's verifier");
+
+  // Receiving WSOL accounts: launcher (the deployer here), treasury, charity.
+  await send([...wrap(deployer.publicKey, 0), ...wrap(config.treasury, 0), ...wrap(config.charity, 0)], [deployer], "WSOL accounts");
+
+  console.log("\n1. Launch, with the launcher's capped first buy in the same transaction");
+  const { c, launcherBase } = await launch(config);
+
+  console.log("\n2. A trade straight on Meteora, then the fee crank");
+  await buy(config.dbcConfig, c, deployer, 0.1 * LAMPORTS_PER_SOL);
+  await collectFees(config, c, deployer.publicKey);
+  console.log(`  artist share held: ${sol(await tokenAmount(c.artistVault))} SOL`);
+
+  const claiming = !process.argv.includes("--no-claim");
+  if (claiming) {
+  console.log("\n3. The artist claims with their passport");
+  await issuePassport();
+  const vaultBefore = await connection.getBalance(passportVault);
+  const claim = await claimIx(config, c, artistWallet, verifier);
+  await send([claim], [artistWallet, verifier], "claim_artist");
+  console.log(`  passport vault +${sol((await connection.getBalance(passportVault)) - vaultBefore)} SOL`);
+  }
+
+  console.log("\n4. Graduation: buy out the curve, migrate to DAMM v2");
+  const g = await graduate(config, c);
+  const { dammPool, creator, partner, tokenAVault, tokenBVault } = g;
+
+  console.log("\n5. A trade on the graduated pool, LP fees, and the artist's payout");
+  await buyOnDamm(c, g, launcherBase, 0.1 * LAMPORTS_PER_SOL);
   const lp = await riff.methods
     .collectLpFees()
     .accountsStrict({
