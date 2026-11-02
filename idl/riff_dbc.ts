@@ -323,6 +323,43 @@ export type RiffDbc = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "dammPoolAuthority",
+          "optional": true
+        },
+        {
+          "name": "dammPool",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creatorPosition",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creatorPositionNftAccount",
+          "optional": true
+        },
+        {
+          "name": "tokenAVault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "tokenBVault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "dammEventAuthority",
+          "optional": true
+        },
+        {
+          "name": "dammProgram",
+          "optional": true,
+          "address": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
         }
       ],
       "args": []
@@ -1425,6 +1462,73 @@ export type RiffDbc = {
       ]
     }
   ],
+  "events": [
+    {
+      "name": "artistClaimed",
+      "discriminator": [
+        49,
+        29,
+        178,
+        17,
+        116,
+        114,
+        250,
+        30
+      ]
+    },
+    {
+      "name": "artistPaid",
+      "discriminator": [
+        27,
+        90,
+        139,
+        71,
+        7,
+        145,
+        41,
+        9
+      ]
+    },
+    {
+      "name": "charitySwept",
+      "discriminator": [
+        168,
+        238,
+        74,
+        73,
+        31,
+        26,
+        101,
+        126
+      ]
+    },
+    {
+      "name": "coinCreated",
+      "discriminator": [
+        155,
+        248,
+        204,
+        17,
+        205,
+        237,
+        158,
+        104
+      ]
+    },
+    {
+      "name": "feesCollected",
+      "discriminator": [
+        233,
+        23,
+        117,
+        225,
+        107,
+        178,
+        254,
+        8
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -1505,9 +1609,82 @@ export type RiffDbc = {
       "code": 6015,
       "name": "notUpgradeAuthority",
       "msg": "Only the program's upgrade authority can initialize it"
+    },
+    {
+      "code": 6016,
+      "name": "lateClaimNeedsLpAccounts",
+      "msg": "A late claim on a graduated coin must collect its LP fees: pass the DAMM v2 accounts"
     }
   ],
   "types": [
+    {
+      "name": "artistClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "passport",
+            "type": "pubkey"
+          },
+          {
+            "name": "passportVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "late",
+            "type": "bool"
+          },
+          {
+            "name": "paidToArtist",
+            "type": "u64"
+          },
+          {
+            "name": "sentToCharity",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "artistPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "passportVault",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "charitySwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "coin",
       "type": {
@@ -1572,6 +1749,34 @@ export type RiffDbc = {
           {
             "name": "escrowBump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "coinCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "launcher",
+            "type": "pubkey"
+          },
+          {
+            "name": "artistId",
+            "type": "string"
+          },
+          {
+            "name": "claimDeadline",
+            "type": "i64"
           }
         ]
       }
@@ -1742,6 +1947,38 @@ export type RiffDbc = {
           {
             "name": "artistName",
             "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "feesCollected",
+      "docs": [
+        "`lp` is true for LP fees of the graduated pool, false for the curve's",
+        "trading fees."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "lp",
+            "type": "bool"
+          },
+          {
+            "name": "toLauncher",
+            "type": "u64"
+          },
+          {
+            "name": "toTreasury",
+            "type": "u64"
+          },
+          {
+            "name": "toArtistVault",
+            "type": "u64"
           }
         ]
       }

@@ -11,6 +11,7 @@ use solana_instructions_sysvar::load_instruction_at_checked;
 use crate::{
     dynamic_bonding_curve::{self, client::args::Swap as SwapIx},
     error::RiffDbcError,
+    events::CoinCreated,
     *,
 };
 
@@ -83,8 +84,12 @@ pub fn handle_create_coin<'info>(
 ) -> Result<()> {
     let artist_id = args.artist_id.trim().to_string();
     let artist_name = args.artist_name.trim().to_string();
+    // A passport can only ever exist for this format: a coin with any other
+    // ID could never be claimed.
+    riff_passport::instructions::shared::spotify_id(&artist_id)
+        .map_err(|_| error!(RiffDbcError::InvalidArtistId))?;
     require!(
-        !artist_id.is_empty() && artist_id.len() <= MAX_ARTIST_ID_LEN,
+        artist_id.len() <= MAX_ARTIST_ID_LEN,
         RiffDbcError::InvalidArtistId
     );
     require!(
@@ -148,6 +153,14 @@ pub fn handle_create_coin<'info>(
     let claim_window = a.config.claim_window_secs;
     let pool = a.pool.key();
     let launcher = a.launcher.key();
+    let claim_deadline = now + claim_window;
+    emit!(CoinCreated {
+        mint,
+        pool,
+        launcher,
+        artist_id: artist_id.clone(),
+        claim_deadline,
+    });
     ctx.accounts.coin.set_inner(Coin {
         mint,
         pool,
@@ -156,7 +169,7 @@ pub fn handle_create_coin<'info>(
         artist_name,
         artist: None,
         created_at: now,
-        claim_deadline: now + claim_window,
+        claim_deadline,
         artist_fees_total: 0,
         launcher_fees_total: 0,
         bump: ctx.bumps.coin,
@@ -166,10 +179,8 @@ pub fn handle_create_coin<'info>(
 }
 
 /// The launcher's first buy goes in the transaction that creates the coin,
-/// as Meteora `swap` instructions after this one: Meteora charges a buy in
-/// the pool's creating transaction the normal fee, not the launch's
-/// anti-sniping fee. So that buy is capped, in SOL, here. Buys nested in
-/// other programs' instructions don't get the normal fee.
+/// as Meteora `swap` instructions after this one, and pays the same fee as
+/// any other trade. It's capped, in SOL, here. Buys nested in other programs' instructions aren't visible here.
 fn check_launch_buy(sysvar: &AccountInfo, pool: &Pubkey, cap: u64) -> Result<()> {
     let mut total: u64 = 0;
     let mut index = 0;

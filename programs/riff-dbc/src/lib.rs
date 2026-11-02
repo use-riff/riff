@@ -23,6 +23,7 @@ declare_program!(dynamic_bonding_curve);
 declare_program!(cp_amm);
 
 pub mod error;
+pub mod events;
 pub mod instructions;
 pub mod state;
 

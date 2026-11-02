@@ -4,7 +4,7 @@ use anchor_spl::{
     token_2022::Token2022,
 };
 
-use crate::{cp_amm, error::RiffDbcError, instructions::shared, *};
+use crate::{cp_amm, error::RiffDbcError, events::FeesCollected, instructions::shared, *};
 
 /// After graduation: collects the LP fees of a coin's two locked positions
 /// in its DAMM v2 pool. Anyone can call it (a crank).
@@ -34,7 +34,7 @@ pub struct CollectLpFees<'info> {
     pub artist_vault: Box<Account<'info, TokenAccount>>,
     /// CHECK: the escrow's account for the coin. Meteora needs one for
     /// token A fees, which are zero: the pool collects fees in SOL.
-    #[account(mut)]
+    #[account(mut, address = shared::escrow_base_address(&escrow.key(), &base_mint.key()))]
     pub escrow_base_account: UncheckedAccount<'info>,
     #[account(mut, token::mint = quote_mint, constraint = launcher_quote_account.owner == coin.launcher @ RiffDbcError::WrongReceiver)]
     pub launcher_quote_account: Box<Account<'info, TokenAccount>>,
@@ -81,27 +81,24 @@ impl<'info> CollectLpFees<'info> {
         owner: &UncheckedAccount<'info>,
         signer: &[&[u8]],
     ) -> Result<()> {
-        cp_amm::cpi::claim_position_fee(CpiContext::new_with_signer(
-            self.damm_program.key(),
-            cp_amm::cpi::accounts::ClaimPositionFee {
-                pool_authority: self.damm_pool_authority.to_account_info(),
-                pool: self.damm_pool.to_account_info(),
-                position: position.to_account_info(),
-                token_a_account: self.escrow_base_account.to_account_info(),
-                token_b_account: to,
-                token_a_vault: self.token_a_vault.to_account_info(),
-                token_b_vault: self.token_b_vault.to_account_info(),
-                token_a_mint: self.base_mint.to_account_info(),
-                token_b_mint: self.quote_mint.to_account_info(),
-                position_nft_account: nft_account.to_account_info(),
-                signer: owner.to_account_info(),
-                token_a_program: self.token_base_program.to_account_info(),
-                token_b_program: self.token_quote_program.to_account_info(),
-                event_authority: self.damm_event_authority.to_account_info(),
-                program: self.damm_program.to_account_info(),
-            },
-            &[signer],
-        ))
+        shared::claim_position_fee(
+            &self.damm_program.to_account_info(),
+            &self.damm_pool_authority.to_account_info(),
+            &self.damm_pool.to_account_info(),
+            &position.to_account_info(),
+            &nft_account.to_account_info(),
+            &self.escrow_base_account.to_account_info(),
+            &to,
+            &self.token_a_vault.to_account_info(),
+            &self.token_b_vault.to_account_info(),
+            &self.base_mint.to_account_info(),
+            &self.quote_mint.to_account_info(),
+            &owner.to_account_info(),
+            &self.token_base_program.to_account_info(),
+            &self.token_quote_program.to_account_info(),
+            &self.damm_event_authority.to_account_info(),
+            signer,
+        )
     }
 }
 
@@ -119,6 +116,7 @@ pub fn handle_collect_lp_fees<'info>(ctx: Context<'info, CollectLpFees<'info>>) 
         fee_signer,
     )?;
     a.fees_vault.reload()?;
+    let partner_share = a.fees_vault.amount - before;
     let to_launcher = shared::split_partner_share(
         &a.token_quote_program.to_account_info(),
         &a.fees_vault,
@@ -127,7 +125,7 @@ pub fn handle_collect_lp_fees<'info>(ctx: Context<'info, CollectLpFees<'info>>) 
         &a.fee_authority.to_account_info(),
         fee_signer,
         a.config.launcher_share_bps,
-        a.fees_vault.amount - before,
+        partner_share,
     )?;
     a.coin.launcher_fees_total += to_launcher;
 
@@ -142,6 +140,14 @@ pub fn handle_collect_lp_fees<'info>(ctx: Context<'info, CollectLpFees<'info>>) 
         &shared::escrow_seeds(&mint, &escrow_bump),
     )?;
     a.artist_vault.reload()?;
-    a.coin.artist_fees_total += a.artist_vault.amount - before;
+    let to_artist_vault = a.artist_vault.amount - before;
+    a.coin.artist_fees_total += to_artist_vault;
+    emit!(FeesCollected {
+        mint,
+        lp: true,
+        to_launcher,
+        to_treasury: partner_share - to_launcher,
+        to_artist_vault,
+    });
     Ok(())
 }

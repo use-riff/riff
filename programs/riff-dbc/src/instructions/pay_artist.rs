@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
-use crate::{error::RiffDbcError, instructions::shared, *};
+use crate::{error::RiffDbcError, events::ArtistPaid, instructions::shared, *};
 
 /// Pays a claimed coin's collected artist fees to the artist's passport
 /// vault, in SOL. Anyone can call it: the money can only go to the vault.
@@ -45,7 +45,7 @@ pub fn handle_pay_artist<'info>(ctx: Context<'info, PayArtist<'info>>) -> Result
     let a = ctx.accounts;
     let mint = a.base_mint.key();
     let escrow_bump = [a.coin.escrow_bump];
-    shared::pay_artist_sol(
+    let amount = shared::pay_artist_sol(
         &a.token_program.to_account_info(),
         &a.system_program.to_account_info(),
         &a.artist_vault,
@@ -55,5 +55,10 @@ pub fn handle_pay_artist<'info>(ctx: Context<'info, PayArtist<'info>>) -> Result
         &a.escrow.to_account_info(),
         &shared::escrow_seeds(&mint, &escrow_bump),
     )?;
+    emit!(ArtistPaid {
+        mint,
+        passport_vault: a.passport_vault.key(),
+        amount,
+    });
     Ok(())
 }

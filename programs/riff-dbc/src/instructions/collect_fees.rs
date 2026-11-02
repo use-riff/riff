@@ -4,7 +4,9 @@ use anchor_spl::{
     token_2022::Token2022,
 };
 
-use crate::{dynamic_bonding_curve, error::RiffDbcError, instructions::shared, *};
+use crate::{
+    dynamic_bonding_curve, error::RiffDbcError, events::FeesCollected, instructions::shared, *,
+};
 
 /// Collects a coin's trading fees from Meteora's curve. Anyone can call it
 /// (a crank).
@@ -29,7 +31,7 @@ pub struct CollectFees<'info> {
     #[account(mut, seeds = [ARTIST_VAULT_SEED, base_mint.key().as_ref()], bump)]
     pub artist_vault: Box<Account<'info, TokenAccount>>,
     /// CHECK: the escrow's account for the coin (see create_coin).
-    #[account(mut)]
+    #[account(mut, address = shared::escrow_base_address(&escrow.key(), &base_mint.key()))]
     pub escrow_base_account: UncheckedAccount<'info>,
     #[account(mut, token::mint = quote_mint, constraint = launcher_quote_account.owner == coin.launcher @ RiffDbcError::WrongReceiver)]
     pub launcher_quote_account: Box<Account<'info, TokenAccount>>,
@@ -92,6 +94,7 @@ pub fn handle_collect_fees<'info>(ctx: Context<'info, CollectFees<'info>>) -> Re
         u64::MAX,
     )?;
     a.fees_vault.reload()?;
+    let partner_share = a.fees_vault.amount - before;
     let to_launcher = shared::split_partner_share(
         &a.token_quote_program.to_account_info(),
         &a.fees_vault,
@@ -100,7 +103,7 @@ pub fn handle_collect_fees<'info>(ctx: Context<'info, CollectFees<'info>>) -> Re
         &a.fee_authority.to_account_info(),
         fee_signer,
         a.config.launcher_share_bps,
-        a.fees_vault.amount - before,
+        partner_share,
     )?;
     a.coin.launcher_fees_total += to_launcher;
 
@@ -123,5 +126,12 @@ pub fn handle_collect_fees<'info>(ctx: Context<'info, CollectFees<'info>>) -> Re
         &shared::escrow_seeds(&mint, &escrow_bump),
     )?;
     a.coin.artist_fees_total += collected;
+    emit!(FeesCollected {
+        mint,
+        lp: false,
+        to_launcher,
+        to_treasury: partner_share - to_launcher,
+        to_artist_vault: collected,
+    });
     Ok(())
 }
