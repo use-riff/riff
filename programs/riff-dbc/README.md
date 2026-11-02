@@ -2,7 +2,7 @@
 
 riff's artist fees on top of [Meteora's Dynamic Bonding Curve](https://github.com/MeteoraAg/dynamic-bonding-curve) (DBC).
 
-Meteora runs the curve, trading and graduation. Launchpads built on DBC (Audius Artist Coins, Bags, Jupiter Studio) trade in Jupiter, Axiom and other apps from their first trade, not only after graduation. This program adds what makes riff riff: the artist's share is held for them until they claim with their [Artist Passport](../riff-passport/README.md), and goes to music charity if they don't.
+Meteora runs the curve, trading and graduation. Launchpads built on DBC (Audius Artist Coins, Bags, Jupiter Studio) can trade in Jupiter, Axiom and other apps before graduation. Whether those apps pick up riff's own config can only be checked once it's on mainnet. This program adds what makes riff riff: the artist's share is held for them until they claim with their [Artist Passport](../riff-passport/README.md), and goes to music charity if they don't.
 
 **Status:** tested against Meteora's real mainnet programs, set up for devnet. Not audited. It replaces `programs/riff`'s own curve, swaps and graduation.
 
@@ -19,7 +19,7 @@ Meteora runs the curve, trading and graduation. Launchpads built on DBC (Audius 
 | `collect_lp_fees` | After graduation, anyone can call it. It collects the LP fees of the coin's two locked DAMM v2 positions: riff's side split with the launcher, the artist's side into the artist vault. |
 | `update_config` | The admin: verifier, charity, treasury, launcher share, launch buy cap, claim window (for new coins). |
 
-Trades don't go through this program. A trade on Jupiter or Axiom pays the same fees as one on riffpad.fun, because Meteora charges them.
+Trades don't go through this program. A trade through any other app pays the same fees as one on riffpad.fun, because Meteora charges them.
 
 **Why the escrow stays the creator.** The artist's earnings follow the passport, not a wallet: if the artist loses their wallet, the passport's recovery moves the passport to a new one, and the vault (and every coin's fees) comes with it. Keeping the escrow as creator also means the creator's locked LP position after graduation stays with riff's program, so its fees keep following the same route.
 

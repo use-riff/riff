@@ -6,9 +6,9 @@ A running record of what's done, with evidence, and what's left for humans. Noth
 |---|---|---|
 | 1 | Devnet Passport upgrade, full devnet e2e with the claim | **Done** (2026-10-27) |
 | 2 | riff-dbc hardening (late-claim LP fees, events, threat review, tests) | **Done** |
-| 3 | Audit package for riff-dbc + riff-passport | **Written**; verifiable build not run; audit itself is for humans |
-| 4 | riffpad.fun on riff-dbc | Not started |
-| 5 | Mainnet parameters and keys plan | Not started |
+| 3 | Audit package for riff-dbc + riff-passport | **Done**, verifiable build included; the audit itself is for humans |
+| 4 | riffpad.fun on riff-dbc | **PR open** (use-riff/riff-site#102), waiting for the owner's OK because merging changes the live devnet site |
+| 5 | Mainnet parameters and keys plan | **Written** ([`MAINNET_LAUNCH.md`](MAINNET_LAUNCH.md)); nothing executed |
 | 6 | Operations: cranks, alerts, runbook, fee and charity ledger | Not started |
 | 7 | Retire the old `riff` program from the app | Not started |
 | 8 | Go/no-go report | Not started |
@@ -60,4 +60,27 @@ Passport recovery and reissue are simulated in these tests by rewriting the pass
 
 [`AUDIT_PACKAGE_DBC.md`](AUDIT_PACKAGE_DBC.md): scope, trust model, what's relied on from Meteora, invariants, threat notes per instruction, known limits, tests, questions.
 
-**Left for humans:** choosing and hiring the auditor. **Left to do:** `make verifiable` (needs Docker running and `solana-verify`; not run, and the target itself is untested).
+**Verifiable build:** `make verifiable` ran from a clean clone, in Docker. Hashes are in the audit package. The riff-dbc and riff-passport suites pass on those binaries (21 and 27 tests). They differ from `make build`'s, which CI and devnet use, so **devnet's e2e hasn't run on the exact binaries mainnet will use**: worth doing once, it needs about 2.4 SOL of buffer in the deployer (0.3 now; the airdrop was rate-limited).
+
+**Left for humans:** choosing and hiring the auditor.
+
+## 4. riffpad.fun on riff-dbc
+
+use-riff/riff-site#102. Tested on devnet:
+
+- `pnpm -C scripts rehearse`: launch with a capped buy, trades matching the client's quotes to the base unit, crank, passport claim, graduation, DAMM v2 trades, LP fees, payout, passport reset. Ran before a later fix to how trades are read back; not rerun since.
+- `pnpm -C scripts crank --yes`: 8 coins, 10 steps, 0 failed.
+- Production build in a real browser with a test wallet: 9 pages render, and a buy and a sell through the UI confirmed. This found a crash that unit tests couldn't (`process is not defined` in Meteora's SDK).
+
+**Answers to the open questions**
+
+- *Does Meteora auto-migrate riff's pools?* By its docs, on mainnet, yes: SOL pools with a threshold of at least 10 SOL. There's no keeper on devnet. Not observed on mainnet for riff's config. Anyone can migrate, so the crank is the fallback.
+- *Do Jupiter and Axiom index pools from riff's config?* **Unverified, and can't be until a mainnet pool exists.** In a sample of 9 other DBC configs, Jupiter routed some through "Dynamic Bonding Curve" and found no route for others (some weren't checked, rate-limited). The README's "from the first trade" is now a hope, not a fact, so its wording changed.
+
+**Not tested:** the launch form, claim button, fee-panel buttons and migrate button through the UI; `/api/passport`'s claim route over HTTP; `/api/crank` on Vercel.
+
+**Behaviour that changed for users:** direct wallet claims are gone (riff-dbc pays passport vaults only); launcher fees arrive as wrapped SOL; volume is curve-total rather than 24h, and all-time high is gone (neither is on chain).
+
+## 5. Mainnet plan
+
+[`MAINNET_LAUNCH.md`](MAINNET_LAUNCH.md): parameters, keys, cost, commands. `make deploy-dbc-mainnet` and `deploy-passport-mainnet` are dry runs without `CONFIRM=mainnet`. `config/mainnet.mjs` simulates without `--yes`, refuses placeholders, and was checked with dry runs against devnet. It has never sent anything.

@@ -1,0 +1,10 @@
+{
+  "_about": "riff-dbc's mainnet settings. Public data only. See docs/MAINNET_LAUNCH.md. mainnet.mjs refuses to run on placeholders.",
+  "verifier": "REPLACE_WITH_VERIFIER_PUBLIC_KEY",
+  "charity": "REPLACE_WITH_CHARITY_SQUADS_VAULT",
+  "treasury": "REPLACE_WITH_TREASURY_SQUADS_VAULT",
+  "admin": "REPLACE_WITH_ADMIN_SQUADS_VAULT",
+  "launcherShareBps": 3750,
+  "maxLaunchBuyLamports": "1000000000",
+  "claimWindowSecs": 7776000
+}
