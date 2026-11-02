@@ -10,7 +10,7 @@ A running record of what's done, with evidence, and what's left for humans. Noth
 | 4 | riffpad.fun on riff-dbc | **PR open** (use-riff/riff-site#102), waiting for the owner's OK because merging changes the live devnet site |
 | 5 | Mainnet parameters and keys plan | **Written** ([`MAINNET_LAUNCH.md`](MAINNET_LAUNCH.md)); nothing executed |
 | 6 | Operations: cranks, alerts, runbook, fee and charity ledger | Not started |
-| 7 | Retire the old `riff` program from the app | Not started |
+| 7 | Retire the old `riff` program from the app | **Done in this repo** (owner's decision: removed). The app's part is in use-riff/riff-site#102. Devnet's passport still runs the older binary until the deployer has SOL |
 | 8 | Go/no-go report | Not started |
 
 ## 1. Devnet Passport upgrade
@@ -60,7 +60,7 @@ Passport recovery and reissue are simulated in these tests by rewriting the pass
 
 [`AUDIT_PACKAGE_DBC.md`](AUDIT_PACKAGE_DBC.md): scope, trust model, what's relied on from Meteora, invariants, threat notes per instruction, known limits, tests, questions.
 
-**Verifiable build:** `make verifiable` ran from a clean clone, in Docker. Hashes are in the audit package. The riff-dbc and riff-passport suites pass on those binaries (21 and 27 tests). They differ from `make build`'s, which CI and devnet use, so **devnet's e2e hasn't run on the exact binaries mainnet will use**: worth doing once, it needs about 2.4 SOL of buffer in the deployer (0.3 now; the airdrop was rate-limited).
+**Verifiable build:** `make verifiable` ran from a clean clone, in Docker. Hashes are in the audit package. The riff-dbc and riff-passport suites passed on the verifiable binaries at `7cab289` (21 and 27 tests); the passport lost 2 tests that exercised the old program since, and both suites pass again on `make build` (21 and 25). They differ from `make build`'s, which CI and devnet use, so **devnet's e2e hasn't run on the exact binaries mainnet will use**: worth doing once, it needs about 2.4 SOL of buffer in the deployer (0.3 now; the airdrop was rate-limited).
 
 **Left for humans:** choosing and hiring the auditor.
 
@@ -84,3 +84,9 @@ use-riff/riff-site#102. Tested on devnet:
 ## 5. Mainnet plan
 
 [`MAINNET_LAUNCH.md`](MAINNET_LAUNCH.md): parameters, keys, cost, commands. `make deploy-dbc-mainnet` and `deploy-passport-mainnet` are dry runs without `CONFIRM=mainnet`. `config/mainnet.mjs` simulates without `--yes`, refuses placeholders, and was checked with dry runs against devnet. It has never sent anything.
+
+## 7. Old program
+
+Removed with the owner's agreement: `programs/riff`, `vectors/`, its IDL and Raydium fixtures. riff-passport's `claim_coin` and `collect_fees` went with it, along with the dependency. The passport's binary went from 515,528 to 481,888 bytes (verifiable builds), and its account layout didn't change. The old program stays deployed on devnet, unused: address in `deployments.json`.
+
+Official estate coins are dropped for now (owner's decision): riff-dbc only pays passport vaults, and passports aren't issued for artists who have passed away. Official charity coins go to charity when the claim window ends.

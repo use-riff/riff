@@ -43,8 +43,8 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 | Item | SOL |
 |---|---|
 | riff-dbc program rent (467,528 bytes) | 2.38 |
-| riff-passport program rent (515,528 bytes) | 2.62 |
-| Deploy buffers, the same again; refunded when the deploy finishes | 5.00 (back) |
+| riff-passport program rent (481,888 bytes) | 2.44 |
+| Deploy buffers, the same again; refunded when the deploy finishes | about 4.9 (back) |
 | riff-dbc and passport configs, fees vault, Meteora config, network and priority fees | about 0.05 (estimate) |
 | Keeper float | 1.00 |
 | **Have in hand** | **about 11**, of which about 5 comes back |

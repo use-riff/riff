@@ -127,14 +127,14 @@ riff-dbc's tests write Passport accounts directly; `cargo test -p riff-passport`
 
 The toolchain is pinned: `rust-toolchain.toml`, `Cargo.lock`, and CI pins Solana CLI and Anchor by hash.
 
-`make verifiable` builds both programs with `solana-verify` in Docker, using the Solana Foundation's 4.1.2 image pinned by digest. **This is the build to audit and deploy.** At `7cab289`, from a clean clone:
+`make verifiable` builds both programs with `solana-verify` in Docker, using the Solana Foundation's 4.1.2 image pinned by digest. **This is the build to audit and deploy.** From a clean clone of the commit that retired the old program:
 
 | Program | Size | File sha256 | `solana-verify` executable hash |
 |---|---|---|---|
-| riff-dbc | 467,528 bytes | `d0ac7ecb0e2eea9566b26e6a125db999b520d82ea2ddd46996db7a5f588625a1` | `d6cba7b8dc6ff522b99957ea3ca99b7f0648319572e7f500446221093039c8b0` |
-| riff-passport | 515,528 bytes | `8cc94ed640ce4ee78f886a3b432cea93352db342c59986a985be081f9522678f` | `704317afd73359807aa9721fc8803f19f4253c40844b31fe51808111ff35a203` |
+| riff-dbc | 467,528 bytes | `2cbbc1e553fc95879f41434295ac0e70369d05774eaf8249fc7277fcf7228171` | `2a8de79e96154e9ad1e04da38e7e7daa151a5661e552720b51720d1225c3f082` |
+| riff-passport | 481,888 bytes | `8a6ddcc2f4705958f0bcec04ed29d923f3298915ec0a800d5f0925e0d1fdbbfb` | `451a0afcd879df8a4516f35d0178a7777729c12e747b8b48824f3c484ade6cb8` |
 
-riff-dbc's matched a `cargo build-sbf --manifest-path programs/riff-dbc/Cargo.toml --arch v0` run on the developer's machine byte for byte. `make build` (Anchor, building the whole workspace) gives different binaries, for example 450,064 bytes for riff-dbc. CI and devnet use that build. The riff-dbc and riff-passport test suites also pass on the verifiable binaries above (21 and 27 tests).
+These change whenever the programs' source or dependencies do: **the hashes that matter are the ones from the audited commit.** At the earlier commit `7cab289`, riff-dbc's Docker build matched a plain `cargo build-sbf --manifest-path programs/riff-dbc/Cargo.toml --arch v0` on the developer's machine byte for byte. `make build` (Anchor, building the whole workspace) gives different binaries, for example about 450 KB for riff-dbc. CI and devnet use that build.
 
 Still to do at launch: `solana-verify verify-from-repo` against the deployed programs, once they exist.
 
