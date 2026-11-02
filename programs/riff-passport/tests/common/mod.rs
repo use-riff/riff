@@ -1,27 +1,69 @@
 #![allow(dead_code, clippy::result_large_err)]
-//! Test helpers: riff and the passport program in LiteSVM, passkeys that
-//! sign like a browser does, and a stand-in Reclaim attestor.
-
-#[path = "../../../riff/tests/common/mod.rs"]
-pub mod riff_env;
+//! Test helpers: the passport program in LiteSVM, passkeys that sign like a
+//! browser does, and a stand-in Reclaim attestor.
 
 use anchor_lang::{
     prelude::{Clock, Pubkey},
     solana_program::{bpf_loader_upgradeable, instruction::Instruction, system_program},
-    InstructionData, ToAccountMetas,
+    AccountDeserialize, InstructionData, ToAccountMetas,
 };
 use base64::Engine;
-use litesvm::types::TransactionResult;
+use litesvm::{types::TransactionResult, LiteSVM};
 use p256::ecdsa::{signature::Signer as _, Signature as P256Signature, SigningKey as P256Key};
 use riff_passport::{PasskeyAction, PasskeyProof, ProofKind};
 use sha2::{Digest, Sha256};
 use solana_keypair::Keypair;
+use solana_message::{Message, VersionedMessage};
 use solana_signer::Signer;
+use solana_transaction::versioned::VersionedTransaction;
 
-#[allow(unused_imports)]
-pub use riff_env::{
-    advance_time, fetch, funded_keypair, lamports, next_slot, send, send_many, SOL,
-};
+pub const SOL: u64 = 1_000_000_000;
+const START_TIME: i64 = 1_790_000_000;
+
+pub fn funded_keypair(svm: &mut LiteSVM) -> Keypair {
+    let kp = Keypair::new();
+    svm.airdrop(&kp.pubkey(), 10 * SOL).unwrap();
+    kp
+}
+
+pub fn send(svm: &mut LiteSVM, ix: Instruction, signers: &[&Keypair]) -> TransactionResult {
+    send_many(svm, &[ix], signers)
+}
+
+/// Sends several instructions as one atomic transaction; the first signer pays.
+pub fn send_many(
+    svm: &mut LiteSVM,
+    ixs: &[Instruction],
+    signers: &[&Keypair],
+) -> TransactionResult {
+    let blockhash = svm.latest_blockhash();
+    let msg = Message::new_with_blockhash(ixs, Some(&signers[0].pubkey()), &blockhash);
+    let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), signers).unwrap();
+    let res = svm.send_transaction(tx);
+    svm.expire_blockhash();
+    res
+}
+
+pub fn fetch<T: AccountDeserialize>(svm: &LiteSVM, address: &Pubkey) -> T {
+    let account = svm.get_account(address).expect("account missing");
+    T::try_deserialize(&mut account.data.as_slice()).unwrap()
+}
+
+pub fn next_slot(svm: &mut LiteSVM) {
+    let slot = svm.get_sysvar::<Clock>().slot;
+    svm.warp_to_slot(slot + 1);
+}
+
+pub fn lamports(svm: &LiteSVM, address: &Pubkey) -> u64 {
+    svm.get_account(address).map_or(0, |a| a.lamports)
+}
+
+/// Moves the clock `secs` forward.
+pub fn advance_time(svm: &mut LiteSVM, secs: i64) {
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.unix_timestamp += secs;
+    svm.set_sysvar(&clock);
+}
 
 pub const ARTIST_ID: &str = "spotify:4Z8W4fKeB5YxbusRsdQVPb";
 pub const SPOTIFY_ID: &str = "4Z8W4fKeB5YxbusRsdQVPb";
@@ -31,15 +73,19 @@ pub const FREE_PER_DAY: u64 = SOL / 10;
 pub const PROOF_MAX_AGE: i64 = 7 * 24 * 60 * 60;
 
 pub struct Env {
-    pub riff: riff_env::Env,
+    pub svm: LiteSVM,
+    /// The program's upgrade authority and first admin.
+    pub admin: Keypair,
+    /// riff's verification service.
+    pub verifier: Keypair,
 }
 
 impl Env {
     pub fn svm(&mut self) -> &mut litesvm::LiteSVM {
-        &mut self.riff.svm
+        &mut self.svm
     }
     pub fn verifier(&self) -> Keypair {
-        self.riff.verifier.insecure_clone()
+        self.verifier.insecure_clone()
     }
 }
 
@@ -89,7 +135,7 @@ pub fn endorsement_address(passport: &Pubkey, mint: &Pubkey) -> Pubkey {
 
 pub fn config_params(env: &Env) -> riff_passport::PassportConfigParams {
     riff_passport::PassportConfigParams {
-        verifier: env.riff.verifier.pubkey(),
+        verifier: env.verifier.pubkey(),
         rp_id_hash: Sha256::digest(RP_ID.as_bytes()).into(),
         recovery_delay: RECOVERY_DELAY,
         free_withdraw_per_day: FREE_PER_DAY,
@@ -97,9 +143,9 @@ pub fn config_params(env: &Env) -> riff_passport::PassportConfigParams {
     }
 }
 
-/// riff and the passport program deployed and configured.
+/// The passport program deployed and configured.
 pub fn setup() -> Env {
-    let mut riff = riff_env::setup();
+    let mut svm = LiteSVM::new();
     // Read when the tests run, not compiled in: `anchor build` compiles the
     // tests (for the IDL) before every program binary exists.
     let bytes = &std::fs::read(concat!(
@@ -107,18 +153,24 @@ pub fn setup() -> Env {
         "/../deploy/riff_passport.so"
     ))
     .expect("riff_passport.so is missing: run `make build` first");
-    riff.svm.add_program(riff_passport::ID, bytes).unwrap();
-    // Make riff's admin the passport program's upgrade authority too.
-    let mut account = riff.svm.get_account(&passport_program_data()).unwrap();
+    svm.add_program(riff_passport::ID, bytes).unwrap();
+    // LiteSVM deploys with no upgrade authority. Rewrite the ProgramData
+    // header (bincode: u32 tag, u64 slot, Option<Pubkey>) to set one.
+    let admin = funded_keypair(&mut svm);
+    let mut account = svm.get_account(&passport_program_data()).unwrap();
     account.data[12] = 1;
-    account.data[13..45].copy_from_slice(riff.admin.pubkey().as_ref());
-    riff.svm
-        .set_account(passport_program_data(), account)
-        .unwrap();
-    riff_env::initialize_config(&mut riff);
+    account.data[13..45].copy_from_slice(admin.pubkey().as_ref());
+    svm.set_account(passport_program_data(), account).unwrap();
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.unix_timestamp = START_TIME;
+    svm.set_sysvar(&clock);
 
-    let mut env = Env { riff };
-    let admin = env.riff.admin.insecure_clone();
+    let mut env = Env {
+        svm,
+        admin,
+        verifier: Keypair::new(),
+    };
+    let admin = env.admin.insecure_clone();
     let ix = ix(
         riff_passport::instruction::InitializeConfig {
             params: config_params(&env),
@@ -170,7 +222,7 @@ pub fn record_proof_ix(
         },
         riff_passport::accounts::RecordProof {
             wallet: *wallet,
-            verifier: env.riff.verifier.pubkey(),
+            verifier: env.verifier.pubkey(),
             config: config_address(),
             proof_record: proof_address(artist_id, wallet, kind),
             system_program: system_program::ID,
@@ -275,7 +327,7 @@ pub fn secp256r1_ix(pubkey: &[u8; 33], signature: &[u8], message: &[u8]) -> Inst
 }
 
 pub fn nonce(env: &Env) -> u64 {
-    fetch::<riff_passport::Passport>(&env.riff.svm, &passport_address(ARTIST_ID)).nonce
+    fetch::<riff_passport::Passport>(&env.svm, &passport_address(ARTIST_ID)).nonce
 }
 
 pub fn instructions_sysvar() -> Pubkey {
@@ -354,7 +406,7 @@ pub fn issued(env: &mut Env) -> (Keypair, TestPasskey) {
 
 /// riff's admin revokes the passport.
 pub fn revoke(env: &mut Env) {
-    let admin = env.riff.admin.insecure_clone();
+    let admin = env.admin.insecure_clone();
     let ix = ix(
         riff_passport::instruction::RevokePassport {
             reason: "taken over".into(),
@@ -418,55 +470,6 @@ pub fn endorsement_accounts(
         instructions: instructions_sysvar(),
         system_program: system_program::ID,
     }
-}
-
-// ---- riff coins
-
-/// A riff coin for the passport's artist, with some trades so it has artist fees.
-pub fn coin_with_fees(env: &mut Env, buys: u64) -> Pubkey {
-    let creator = funded_keypair(env.svm());
-    let mint = Keypair::new();
-    let mut args = riff_env::coin_args();
-    args.artist_id = ARTIST_ID.into();
-    let ix = riff_env::create_coin_ix(&creator.pubkey(), &mint.pubkey(), args);
-    send(env.svm(), ix, &[&creator, &mint]).unwrap();
-    next_slot(env.svm());
-    let mint = mint.pubkey();
-    let buyer = riff_env::trader(env.svm(), &mint, 1_000 * SOL);
-    for _ in 0..buys {
-        let ix = riff_env::buy_ix(&buyer.pubkey(), &mint, 10 * SOL, 1);
-        send(env.svm(), ix, &[&buyer]).unwrap();
-    }
-    mint
-}
-
-pub fn claim_coin_ix(env: &Env, wallet: &Pubkey, mint: &Pubkey) -> Instruction {
-    let passport = passport_address(ARTIST_ID);
-    ix(
-        riff_passport::instruction::ClaimCoin {},
-        riff_passport::accounts::ClaimCoin {
-            wallet: *wallet,
-            verifier: env.riff.verifier.pubkey(),
-            passport,
-            vault: vault_address(&passport),
-            riff_config: riff_env::config_address(),
-            coin: riff_env::coin_address(mint),
-            riff_program: riff::ID,
-        },
-    )
-}
-
-pub fn collect_ix(mint: &Pubkey) -> Instruction {
-    let passport = passport_address(ARTIST_ID);
-    ix(
-        riff_passport::instruction::CollectFees {},
-        riff_passport::accounts::CollectFees {
-            passport,
-            vault: vault_address(&passport),
-            coin: riff_env::coin_address(mint),
-            riff_program: riff::ID,
-        },
-    )
 }
 
 pub fn withdraw_ix(wallet: &Pubkey, amount: u64, proof: Option<PasskeyProof>) -> Instruction {

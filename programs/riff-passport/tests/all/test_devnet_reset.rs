@@ -8,10 +8,9 @@ use anchor_lang::{
 };
 use riff_passport::{error::PassportError as E, ProofKind};
 use sha2::{Digest, Sha256};
-use solana_keypair::Keypair;
 use solana_signer::Signer;
 
-/// riff and the devnet build of the passport program, configured.
+/// The devnet build of the passport program, configured.
 fn devnet_setup() -> Env {
     let mut env = setup();
     let bytes = std::fs::read(concat!(
@@ -46,10 +45,6 @@ fn the_admin_resets_a_passport_and_the_artist_gets_a_new_one() {
     let (wallet, _) = issued(&mut env);
     let passport = passport_address(ARTIST_ID);
     let vault = vault_address(&passport);
-    let coin = coin_with_fees(&mut env, 2);
-    let verifier = env.verifier();
-    let claim = claim_coin_ix(&env, &wallet.pubkey(), &coin);
-    send(env.svm(), claim, &[&wallet, &verifier]).unwrap();
 
     // Only riff's admin can reset.
     let stranger = funded_keypair(env.svm());
@@ -57,7 +52,7 @@ fn the_admin_resets_a_passport_and_the_artist_gets_a_new_one() {
         send(env.svm(), reset_ix(&stranger.pubkey()), &[&stranger]),
         E::NotAdmin,
     );
-    let admin = env.riff.admin.insecure_clone();
+    let admin = env.admin.insecure_clone();
     send(env.svm(), reset_ix(&admin.pubkey()), &[&admin]).unwrap();
     assert!(env
         .svm()
@@ -78,12 +73,9 @@ fn the_admin_resets_a_passport_and_the_artist_gets_a_new_one() {
         &[ProofKind::SpotifyEmail, ProofKind::Distributor],
     )
     .unwrap();
-    let p: riff_passport::Passport = fetch(&env.riff.svm, &passport);
+    let p: riff_passport::Passport = fetch(&env.svm, &passport);
     assert_eq!(p.passkey, again.public());
 
-    // The coin claimed before still pays the (new) vault.
-    let payer = Keypair::new();
-    env.svm().airdrop(&payer.pubkey(), SOL).unwrap();
-    send(env.svm(), collect_ix(&coin), &[&payer]).unwrap();
-    assert!(lamports(&env.riff.svm, &vault) > 0);
+    // The vault is at the same address, so what's claimed into it stays put.
+    assert!(lamports(&env.svm, &vault) > 0);
 }

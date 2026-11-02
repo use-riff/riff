@@ -2410,22 +2410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "riff"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
- "base64 0.22.1",
- "litesvm",
- "serde_json",
- "solana-account",
- "solana-keypair",
- "solana-message",
- "solana-signer",
- "solana-transaction",
-]
-
-[[package]]
 name = "riff-dbc"
 version = "0.0.1"
 dependencies = [
@@ -2454,7 +2438,6 @@ dependencies = [
  "litesvm",
  "p256",
  "rand_core 0.6.4",
- "riff",
  "serde_json",
  "sha2 0.10.9",
  "solana-account",

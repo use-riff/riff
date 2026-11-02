@@ -81,20 +81,17 @@ jobs:
       - name: Build (SBPF v0)
         run: make build
 
-      - name: Build for devnet
-        run: make build-devnet
+      - name: Build the passport for devnet
+        run: make build-passport-devnet
 
       - name: Test
         run: cargo test
 
-      - name: Test devnet addresses
-        run: cargo test -p riff --lib --features devnet
+      - name: Test the devnet-only passport reset
+        run: cargo test -p riff-passport --features devnet --test all test_devnet_reset
 
       - name: Published IDL matches the program
         run: make idl && git diff --exit-code idl
-
-      - name: Published curve vectors match the program
-        run: make vectors && git diff --exit-code vectors
 
       - name: Clippy
         run: make lint

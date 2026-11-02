@@ -88,16 +88,12 @@ fn a_new_passport_cant_endorse_or_withdraw_until_its_probation_ends() {
     let small = withdraw_ix(&wallet.pubkey(), 1000, None);
     assert_error(send(env.svm(), small.clone(), &[&wallet]), E::OnProbation);
 
-    // Saying "not mine" is always safe, and claiming only moves money into the vault.
+    // Saying "not mine" is always safe.
     let disavow = ix(
         riff_passport::instruction::Disavow { mint },
         endorsement_accounts(&wallet.pubkey(), &mint),
     );
     send(env.svm(), disavow, &[&wallet]).unwrap();
-    let coin = coin_with_fees(&mut env, 1);
-    let verifier = env.verifier();
-    let claim = claim_coin_ix(&env, &wallet.pubkey(), &coin);
-    send(env.svm(), claim, &[&wallet, &verifier]).unwrap();
 
     // One second before the end: still waiting. Then both work.
     advance_time(env.svm(), RECOVERY_DELAY - 1);
@@ -111,19 +107,15 @@ fn a_new_passport_cant_endorse_or_withdraw_until_its_probation_ends() {
 #[test]
 fn riff_and_the_real_artist_take_back_a_squatted_passport() {
     let mut env = setup();
-    // Someone with the artist's inbox gets the passport first and claims a coin.
+    // Someone with the artist's inbox gets the passport first, and earnings arrive.
     let squatter = funded_keypair(env.svm());
     let squatter_key = TestPasskey::new();
     issue(&mut env, &squatter, &squatter_key, &DEFAULT_KINDS).unwrap();
     let passport = passport_address(ARTIST_ID);
     let vault = vault_address(&passport);
-    let coin = coin_with_fees(&mut env, 3);
-    let verifier = env.verifier();
-    let claim = claim_coin_ix(&env, &squatter.pubkey(), &coin);
-    send(env.svm(), claim, &[&squatter, &verifier]).unwrap();
-    let payer = funded_keypair(env.svm());
-    send(env.svm(), collect_ix(&coin), &[&payer]).unwrap();
-    let held = lamports(&env.riff.svm, &vault);
+    // What riff-dbc pays a claimed coin's artist.
+    env.svm().airdrop(&vault, 3 * SOL).unwrap();
+    let held = lamports(&env.svm, &vault);
 
     // Still on probation, so nothing could leave before riff stepped in.
     revoke(&mut env);
@@ -131,7 +123,7 @@ fn riff_and_the_real_artist_take_back_a_squatted_passport() {
     let artist = funded_keypair(env.svm());
     let artist_key = TestPasskey::new();
     let records = proofs_for(&mut env, &artist, &DEFAULT_KINDS);
-    let admin = env.riff.admin.insecure_clone();
+    let admin = env.admin.insecure_clone();
 
     // riff's admin must sign: the artist alone can't take a revoked passport.
     let stranger = funded_keypair(env.svm());
@@ -141,15 +133,13 @@ fn riff_and_the_real_artist_take_back_a_squatted_passport() {
     );
     reissue(&mut env, &admin, &artist, &artist_key, &records).unwrap();
 
-    let p: riff_passport::Passport = fetch(&env.riff.svm, &passport);
+    let p: riff_passport::Passport = fetch(&env.svm, &passport);
     assert_eq!(p.wallet, artist.pubkey());
     assert_eq!(p.passkey, artist_key.public());
     assert!(!p.revoked);
     assert!(p.recovery.is_none());
-    // Same vault: what was claimed is the artist's, and the coin still pays it.
-    assert_eq!(lamports(&env.riff.svm, &vault), held);
-    let c: riff::Coin = fetch(&env.riff.svm, &crate::common::riff_env::coin_address(&coin));
-    assert_eq!(c.artist, Some(vault));
+    // Same vault: what was earned is the artist's.
+    assert_eq!(lamports(&env.svm, &vault), held);
 
     // The squatter is out, even with their passkey.
     let ixs = withdraw(&env, &squatter.pubkey(), &squatter_key, 1000);
@@ -162,11 +152,11 @@ fn riff_and_the_real_artist_take_back_a_squatted_passport() {
     let ixs = withdraw(&env, &artist.pubkey(), &artist_key, SOL / 2);
     assert_error(send_many(env.svm(), &ixs, &[&artist]), E::OnProbation);
     advance_time(env.svm(), RECOVERY_DELAY);
-    let available = held - env.riff.svm.minimum_balance_for_rent_exemption(8 + 32);
-    let before = lamports(&env.riff.svm, &artist.pubkey());
+    let available = held - env.svm.minimum_balance_for_rent_exemption(8 + 32);
+    let before = lamports(&env.svm, &artist.pubkey());
     let ixs = withdraw(&env, &artist.pubkey(), &artist_key, available);
     send_many(env.svm(), &ixs, &[&artist]).unwrap();
-    assert!(lamports(&env.riff.svm, &artist.pubkey()) > before + available - SOL / 100);
+    assert!(lamports(&env.svm, &artist.pubkey()) > before + available - SOL / 100);
 }
 
 #[test]
@@ -176,7 +166,7 @@ fn only_a_revoked_passport_can_be_reissued() {
     let artist = funded_keypair(env.svm());
     let artist_key = TestPasskey::new();
     let records = proofs_for(&mut env, &artist, &DEFAULT_KINDS);
-    let admin = env.riff.admin.insecure_clone();
+    let admin = env.admin.insecure_clone();
     assert_error(
         reissue(&mut env, &admin, &artist, &artist_key, &records),
         E::NotRevoked,
@@ -190,7 +180,7 @@ fn reissuing_needs_the_same_proof_as_issuing() {
     revoke(&mut env);
     let artist = funded_keypair(env.svm());
     let artist_key = TestPasskey::new();
-    let admin = env.riff.admin.insecure_clone();
+    let admin = env.admin.insecure_clone();
     // One source only: not enough, even with riff's admin.
     let records = proofs_for(&mut env, &artist, &[ProofKind::SpotifyEmail]);
     assert_error(

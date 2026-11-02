@@ -49,8 +49,6 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 | Keeper float | 1.00 |
 | **Have in hand** | **about 11**, of which about 5 comes back |
 
-Removing the old `riff` dependency from riff-passport (readiness item 7) should shrink its binary and rent.
-
 ## Before launch day (humans)
 
 - [ ] External audit done, and its findings fixed, on the commit below.
@@ -58,7 +56,6 @@ Removing the old `riff` dependency from riff-passport (readiness item 7) should 
 - [ ] Squads vaults created; signers hold separate hardware wallets; time lock set.
 - [ ] Charity shortlist of organisations that accept crypto and have consented.
 - [ ] Private RPC in `~/.config/riff/mainnet/rpc-url` and in Vercel.
-- [ ] Decide what happens to official estate coins: see the go/no-go report.
 
 ## Launch-day commands
 

@@ -2,7 +2,7 @@
 # default runtime. (Anchor 1.x defaults to v3, which LiteSVM rejects.)
 ARCH ?= v0
 
-.PHONY: build build-devnet build-passport-devnet test fmt lint clean deploy-devnet deploy-passport-devnet deploy-dbc-devnet idl vectors dbc-fixtures verifiable deploy-dbc-mainnet deploy-passport-mainnet
+.PHONY: build build-passport-devnet test fmt lint clean deploy-passport-devnet deploy-dbc-devnet idl dbc-fixtures verifiable deploy-dbc-mainnet deploy-passport-mainnet
 
 # riff-dbc's tests run against Meteora's Dynamic Bonding Curve program as
 # deployed on mainnet. Its source is under a non-commercial licence, so it's
@@ -26,23 +26,9 @@ build:
 # clients can use it without building Rust. CI fails if it's stale.
 idl:
 	mkdir -p idl
-	anchor idl build -p riff -o idl/riff.json -t idl/riff.ts
 	anchor idl build -p riff_passport -o idl/riff_passport.json -t idl/riff_passport.ts
 	anchor idl build -p riff_dbc -o idl/riff_dbc.json -t idl/riff_dbc.ts
 	rm -f idl/*_errors.ts  # also written by Anchor's --out-ts; not part of the published interface
-
-# Regenerate vectors/curve.json from the program's curve math.
-vectors:
-	cargo test -p riff --test all curve_vectors -- --ignored
-
-# Devnet build of riff (Raydium's devnet addresses), saved as riff-devnet.so
-# so it can't be mistaken for the mainnet riff.so. Only riff has devnet
-# differences. It builds in its own target directory, so the mainnet build
-# (which the tests use) is never switched to devnet and back.
-build-devnet:
-	CARGO_TARGET_DIR=$(CURDIR)/target/devnet cargo build-sbf --manifest-path programs/riff/Cargo.toml \
-	  --arch $(ARCH) --features devnet --sbf-out-dir $(CURDIR)/target/devnet/deploy
-	cp target/devnet/deploy/riff.so target/deploy/riff-devnet.so
 
 # The passport's devnet build adds a devnet-only `reset_passport` (for demos
 # and tests); the mainnet build never contains it.
@@ -76,11 +62,6 @@ clean:
 # target/deploy/*-keypair.json are local throwaways that Anchor makes; they
 # aren't the devnet programs' keys, so these targets never use them.
 DEVNET_KEYS ?= $(HOME)/.config/riff/devnet
-
-deploy-devnet: build-devnet
-	solana program deploy target/deploy/riff-devnet.so \
-	  --program-id 59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV \
-	  --keypair $(DEVNET_KEYS)/deployer.json --url devnet
 
 deploy-passport-devnet: build-passport-devnet
 	solana program deploy target/devnet/deploy/riff_passport.so \

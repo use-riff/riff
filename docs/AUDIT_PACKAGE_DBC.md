@@ -1,6 +1,6 @@
 # riff-dbc + riff-passport: audit package
 
-Everything an external auditor needs to quote and start. **Neither program has been audited.** Humans choose and hire the auditor; `AUDIT_PACKAGE.md` covers the old `programs/riff`, which this replaces (candidate firms and what to ask them are listed there).
+Everything an external auditor needs to quote and start. **Neither program has been audited.** Humans choose and hire the auditor: see the end of this file.
 
 ## What it is
 
@@ -16,7 +16,7 @@ Read first: `programs/riff-dbc/README.md`, `programs/riff-passport/README.md`.
 | riff-passport | `programs/riff-passport/src/` (mainnet build, without the `devnet` feature) | see its README's table |
 
 - **Commit:** the `main` commit named in the engagement. Anchor 1.2.0, Rust 1.89, Solana CLI 4.1.2, SBPF v0.
-- **Out of scope:** Meteora's DBC and DAMM v2 (behaviour relied on is listed below and worth checking), Anchor, the token programs, all off-chain code. `programs/riff` is being retired: see "Known limits" for how riff-passport still depends on it.
+- **Out of scope:** Meteora's DBC and DAMM v2 (behaviour relied on is listed below and worth checking), Anchor, the token programs, all off-chain code.
 
 ## Accounts (riff-dbc)
 
@@ -111,8 +111,7 @@ Internal review points, on top of its README and `tests/all/test_takeover.rs`:
 5. **No pause** in riff-dbc. Trading is Meteora's; riff's instructions can only be stopped by an upgrade.
 6. **One-step admin transfer** in `update_config`.
 7. **`emit!` events** are plain logs that other programs can imitate. Readers must check the program ID of the emitting instruction.
-8. **riff-passport still depends on the old `riff` program**: `claim_coin` and `collect_fees` CPI into it, and it isn't planned for mainnet. Removing them shrinks the binary and the scope, and needs the owner's decision (readiness item 7).
-9. **Fuzzing:** a deterministic per-account substitution test exists; no coverage-guided fuzzing has been run.
+8. **Fuzzing:** a deterministic per-account substitution test exists; no coverage-guided fuzzing has been run.
 
 ## Tests
 
@@ -122,7 +121,7 @@ make test           # riff-dbc: 21 tests in LiteSVM against Meteora's real progr
 make lint
 ```
 
-riff-dbc's tests write Passport accounts directly; `cargo test -p riff-passport` (27 tests) covers issuing them. LiteSVM doesn't enforce the transaction size limit: the largest claim is asserted in a test, and `node programs/riff-dbc/config/devnet.mjs e2e [--late]` runs the flows on a real validator (evidence in `MAINNET_READINESS.md`).
+riff-dbc's tests write Passport accounts directly; `cargo test -p riff-passport` (25 tests) covers issuing them. LiteSVM doesn't enforce the transaction size limit: the largest claim is asserted in a test, and `node programs/riff-dbc/config/devnet.mjs e2e [--late]` runs the flows on a real validator (evidence in `MAINNET_READINESS.md`).
 
 ## Build reproducibility
 
@@ -148,3 +147,13 @@ Still to do at launch: `solana-verify verify-from-repo` against the deployed pro
 5. Is the passkey verification sound (precompile parsing, challenge binding, replay)?
 6. Can recovery, veto, revocation or reissue be abused to take a vault?
 7. What happens to riff if Meteora upgrades DBC or DAMM v2?
+
+## Candidate firms
+
+Solana-specialist auditors to request quotes from (availability and
+pricing not checked; ask each for a Solana/Anchor track record):
+OtterSec, Neodyme, Zellic, Sec3, Halborn, Trail of Bits, Ackee Blockchain
+Security, Accretion.
+
+Ask each for: timeline, cost, whether a fix-review round is included, and
+whether the report will be public.

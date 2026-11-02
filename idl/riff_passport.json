@@ -85,161 +85,6 @@
       ]
     },
     {
-      "name": "claim_coin",
-      "discriminator": [
-        222,
-        156,
-        154,
-        212,
-        188,
-        143,
-        84,
-        105
-      ],
-      "accounts": [
-        {
-          "name": "wallet",
-          "signer": true
-        },
-        {
-          "name": "verifier",
-          "docs": [
-            "riff's verifier, co-signing as riff's `claim_artist` requires."
-          ],
-          "signer": true
-        },
-        {
-          "name": "passport",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  115,
-                  115,
-                  112,
-                  111,
-                  114,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport.artist_id",
-                "account": "Passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "riff_config"
-        },
-        {
-          "name": "coin",
-          "writable": true
-        },
-        {
-          "name": "riff_program",
-          "address": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "collect_fees",
-      "discriminator": [
-        164,
-        152,
-        207,
-        99,
-        30,
-        186,
-        19,
-        182
-      ],
-      "accounts": [
-        {
-          "name": "passport",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  115,
-                  115,
-                  112,
-                  111,
-                  114,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport.artist_id",
-                "account": "Passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "coin",
-          "writable": true
-        },
-        {
-          "name": "riff_program",
-          "address": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "disavow",
       "discriminator": [
         175,
@@ -1496,19 +1341,6 @@
   ],
   "events": [
     {
-      "name": "CoinClaimed",
-      "discriminator": [
-        110,
-        254,
-        3,
-        227,
-        117,
-        77,
-        164,
-        24
-      ]
-    },
-    {
       "name": "EndorsementChanged",
       "discriminator": [
         125,
@@ -1803,22 +1635,6 @@
     }
   ],
   "types": [
-    {
-      "name": "CoinClaimed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "passport",
-            "type": "pubkey"
-          },
-          {
-            "name": "mint",
-            "type": "pubkey"
-          }
-        ]
-      }
-    },
     {
       "name": "Endorsement",
       "docs": [

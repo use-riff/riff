@@ -76,12 +76,6 @@ pub struct PassportReissued {
 }
 
 #[event]
-pub struct CoinClaimed {
-    pub passport: Pubkey,
-    pub mint: Pubkey,
-}
-
-#[event]
 pub struct VaultWithdrawn {
     pub passport: Pubkey,
     pub to: Pubkey,

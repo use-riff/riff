@@ -125,14 +125,6 @@ pub mod riff_passport {
         recovery::handle_finalize_recovery(ctx)
     }
 
-    pub fn claim_coin(ctx: Context<ClaimCoin>) -> Result<()> {
-        vault::handle_claim_coin(ctx)
-    }
-
-    pub fn collect_fees(ctx: Context<CollectFees>) -> Result<()> {
-        vault::handle_collect_fees(ctx)
-    }
-
     pub fn withdraw(
         ctx: Context<WithdrawVault>,
         amount: u64,
