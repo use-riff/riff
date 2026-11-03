@@ -1,8 +1,7 @@
 //! riff's artist fees on top of Meteora's Dynamic Bonding Curve.
 //!
-//! Meteora runs the curve, trading and graduation, so riff coins trade in
-//! Jupiter, Axiom and other apps from their first trade. riff keeps what
-//! makes it riff:
+//! Meteora runs the curve, trading and graduation, so riff coins can trade
+//! outside riff's own site. riff keeps what makes it riff:
 //!
 //! - Each coin's pool is created with a riff-owned **escrow** as its
 //!   creator, for good. The creator share of every trade (the artist's

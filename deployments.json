@@ -1,34 +1,36 @@
 {
-  "program": "riff",
+  "program": "riff-dbc and riff-passport",
   "source": "https://github.com/use-riff/riff",
   "build": {
     "anchor": "1.2.0",
     "rust": "1.89.0",
     "solanaCli": "4.1.2",
     "sbpfArch": "v0",
-    "mainnet": "make build",
-    "devnet": "make build-devnet (cargo feature \"devnet\": Raydium's devnet addresses)"
+    "mainnet": "make verifiable (solana-verify, in Docker)",
+    "devnet": "make build; passport: make build-passport-devnet (adds the devnet-only reset_passport)"
   },
-  "clusters": {
-    "devnet": {
-      "status": "live, for testing",
-      "programId": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV",
-      "config": "96rEETSfoVcoUVjtBffBhjutmyynSrRfgDfjC3X7P4hK",
-      "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
-      "raydiumCpmm": "DRaycpLY18LhpbydsBWbVJtxpNv9oXPgjRSfpF2bWpYb",
-      "raydiumAmmConfig": "5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy",
-      "notes": "Curve starts at 0.3 SOL virtual reserves (100x cheaper than mainnet) and a 1-hour claim window, so demos can sell out and graduate with devnet SOL."
-    },
-    "mainnet-beta": {
-      "status": "not deployed",
-      "programId": null,
-      "raydiumCpmm": "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
-      "raydiumAmmConfig": "D4FPEruKEHrG5TenZ2mpDGEfu1iUvTiqBxvpU8HLBvC2"
+  "dbc": {
+    "program": "riff-dbc",
+    "build": "make build on devnet; make verifiable for mainnet",
+    "clusters": {
+      "devnet": {
+        "status": "live, for testing",
+        "programId": "gATYd3vfHCPCrhFupj8HxVX78syyXNfPSbYRsttm9RF",
+        "config": "6CLkcP4aNj9dkQRy6PbYgPkhyZrxzFUke621hzAJrDyH",
+        "meteoraConfig": "5m2xhUh7aJJ2KfwkHk7qNCCDaUzmzp15detHbZA1TfsZ",
+        "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
+        "notes": "0.3 -> 3 SOL market cap (graduates at ~0.72 SOL), 0.01 SOL launch buy cap, 1-hour claim window. Set up with programs/riff-dbc/config/devnet.mjs.",
+        "binarySha256": "cfaa3131e51bcc95cade6eb299742f90713688d33ca0e283b6cab6757b5846b3"
+      },
+      "mainnet-beta": {
+        "status": "not deployed",
+        "programId": null
+      }
     }
   },
   "passport": {
     "program": "riff-passport",
-    "build": "devnet: make build-passport-devnet (adds the devnet-only reset_passport); mainnet: make build",
+    "build": "devnet: make build-passport-devnet; mainnet: make verifiable",
     "clusters": {
       "devnet": {
         "status": "live, for testing",
@@ -44,22 +46,13 @@
       }
     }
   },
-  "dbc": {
-    "program": "riff-dbc",
-    "build": "make build (same toolchain; no devnet feature: Meteora's programs have the same addresses on devnet)",
-    "clusters": {
+  "retired": {
+    "riff": {
+      "status": "retired; never on mainnet. Source removed from this repo after 7cab289; see git history.",
       "devnet": {
-        "status": "live, for testing",
-        "programId": "gATYd3vfHCPCrhFupj8HxVX78syyXNfPSbYRsttm9RF",
-        "config": "6CLkcP4aNj9dkQRy6PbYgPkhyZrxzFUke621hzAJrDyH",
-        "meteoraConfig": "5m2xhUh7aJJ2KfwkHk7qNCCDaUzmzp15detHbZA1TfsZ",
-        "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
-        "notes": "0.3 -> 3 SOL market cap (graduates at ~0.72 SOL), 0.01 SOL launch buy cap, 1-hour claim window. Set up with programs/riff-dbc/config/devnet.mjs.",
-        "binarySha256": "cfaa3131e51bcc95cade6eb299742f90713688d33ca0e283b6cab6757b5846b3"
-      },
-      "mainnet-beta": {
-        "status": "not deployed",
-        "programId": null
+        "programId": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV",
+        "config": "96rEETSfoVcoUVjtBffBhjutmyynSrRfgDfjC3X7P4hK",
+        "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ"
       }
     }
   }

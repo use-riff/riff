@@ -56,17 +56,16 @@ A public, hack-resistant identity for musicians on Solana.
    - The recovery waits out a public time-lock (72 hours on mainnet).
    - During the time-lock, the old passkey or any *guardian* can veto it. A guardian is a fresh proof of the same source as one already on the passport, such as the artist's YouTube channel (any code in the artist's Spotify bio counts, since only the artist can edit it). A stolen wallet alone can do nothing.
 
-4. **Earnings belong to the passport.** `claim_coin` claims a riff coin with
-   the passport's vault as the coin's artist. The vault is a program account
-   that only this program can pay out of: riff's `claim_artist` and
-   `withdraw_artist_fees` are called with the vault signing through its seeds.
-   A lost wallet never loses the artist's money.
+4. **Earnings belong to the passport.** When a coin is claimed with
+   [riff-dbc](../riff-dbc/README.md), the passport's vault becomes the coin's
+   artist, and riff-dbc pays it in SOL. The vault is a program account that only
+   this program can pay out of, so a lost wallet never loses the artist's money.
 
 5. **Probation for new passports.** A passport made from a hacked inbox
    would pass the proofs: most artists get their Spotify, distributor and
    Apple emails in one inbox. So a new passport waits out the same period as
    a recovery (72 hours on mainnet) before it can `endorse` or `withdraw`.
-   It can still `disavow` and `claim_coin` (claiming only moves money into
+   It can still `disavow` and claim coins (claiming only moves money into
    the vault). If it was a takeover, riff revokes it in that window, and
    `reissue_passport` gives it to the real artist: riff's admin (a multisig
    with a time-lock on mainnet) and the artist's wallet sign, with fresh
@@ -98,8 +97,6 @@ A public, hack-resistant identity for musicians on Solana.
 | `request_recovery` | a new wallet, with fresh proofs and a new passkey |
 | `veto_recovery` | the passkey, or a guardian proof |
 | `finalize_recovery` | anyone, after the time-lock |
-| `claim_coin` | the wallet plus riff's verifier (as riff requires) |
-| `collect_fees` | anyone; the money can only go to the vault |
 | `withdraw` | after the probation: the wallet up to the daily amount; the passkey for more |
 | `revoke_passport` | the admin, publicly logged |
 | `reissue_passport` | the admin plus the artist's wallet, with fresh proofs and a new passkey; only for a revoked passport |
@@ -131,8 +128,7 @@ A public, hack-resistant identity for musicians on Solana.
 
 ## Tests
 
-`cargo test -p riff-passport` (after `make build`) runs the program in LiteSVM
-with riff deployed next to it.
+`cargo test -p riff-passport` (after `make build`) runs the program in LiteSVM.
 
 - The passkeys are real P-256 keys that sign the way browsers do, including
   the authenticator data and the client data JSON.

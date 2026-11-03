@@ -43,13 +43,11 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 | Item | SOL |
 |---|---|
 | riff-dbc program rent (467,528 bytes) | 2.38 |
-| riff-passport program rent (515,528 bytes) | 2.62 |
-| Deploy buffers, the same again; refunded when the deploy finishes | 5.00 (back) |
+| riff-passport program rent (481,888 bytes) | 2.44 |
+| Deploy buffers, the same again; refunded when the deploy finishes | about 4.9 (back) |
 | riff-dbc and passport configs, fees vault, Meteora config, network and priority fees | about 0.05 (estimate) |
 | Keeper float | 1.00 |
 | **Have in hand** | **about 11**, of which about 5 comes back |
-
-Removing the old `riff` dependency from riff-passport (readiness item 7) should shrink its binary and rent.
 
 ## Before launch day (humans)
 
@@ -58,7 +56,6 @@ Removing the old `riff` dependency from riff-passport (readiness item 7) should 
 - [ ] Squads vaults created; signers hold separate hardware wallets; time lock set.
 - [ ] Charity shortlist of organisations that accept crypto and have consented.
 - [ ] Private RPC in `~/.config/riff/mainnet/rpc-url` and in Vercel.
-- [ ] Decide what happens to official estate coins: see the go/no-go report.
 
 ## Launch-day commands
 

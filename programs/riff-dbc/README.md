@@ -4,7 +4,7 @@ riff's artist fees on top of [Meteora's Dynamic Bonding Curve](https://github.co
 
 Meteora runs the curve, trading and graduation. Launchpads built on DBC (Audius Artist Coins, Bags, Jupiter Studio) can trade in Jupiter, Axiom and other apps before graduation. Whether those apps pick up riff's own config can only be checked once it's on mainnet. This program adds what makes riff riff: the artist's share is held for them until they claim with their [Artist Passport](../riff-passport/README.md), and goes to music charity if they don't.
 
-**Status:** tested against Meteora's real mainnet programs, set up for devnet. Not audited. It replaces `programs/riff`'s own curve, swaps and graduation.
+**Status:** tested against Meteora's real mainnet programs, set up for devnet. Not audited.
 
 ## How it works
 

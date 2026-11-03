@@ -7,14 +7,13 @@ use solana_signer::Signer;
 fn issues_a_passport_with_two_sources_including_a_strong_one() {
     let mut env = setup();
     let (wallet, passkey) = issued(&mut env);
-    let passport: riff_passport::Passport = fetch(&env.riff.svm, &passport_address(ARTIST_ID));
+    let passport: riff_passport::Passport = fetch(&env.svm, &passport_address(ARTIST_ID));
     assert_eq!(passport.artist_id, ARTIST_ID);
     assert_eq!(passport.wallet, wallet.pubkey());
     assert_eq!(passport.passkey, passkey.public());
     assert_eq!(passport.proofs.len(), 2);
     assert_eq!(passport.nonce, 1);
-    let vault: riff_passport::Vault =
-        fetch(&env.riff.svm, &vault_address(&passport_address(ARTIST_ID)));
+    let vault: riff_passport::Vault = fetch(&env.svm, &vault_address(&passport_address(ARTIST_ID)));
     assert_eq!(vault.passport, passport_address(ARTIST_ID));
 }
 
@@ -142,7 +141,7 @@ fn a_spotify_email_and_youtube_make_a_passport() {
         &[ProofKind::SpotifyEmail, ProofKind::YouTube],
     )
     .unwrap();
-    let passport: riff_passport::Passport = fetch(&env.riff.svm, &passport_address(ARTIST_ID));
+    let passport: riff_passport::Passport = fetch(&env.svm, &passport_address(ARTIST_ID));
     let kinds: Vec<_> = passport.proofs.iter().map(|p| p.kind).collect();
     assert_eq!(kinds, vec![ProofKind::SpotifyEmail, ProofKind::YouTube]);
 }
@@ -225,8 +224,7 @@ fn passkey_must_sign_this_exact_action_on_this_site() {
         &[&wallet],
     )
     .unwrap();
-    let e: riff_passport::Endorsement =
-        fetch(&env.riff.svm, &endorsement_address(&passport, &mint));
+    let e: riff_passport::Endorsement = fetch(&env.svm, &endorsement_address(&passport, &mint));
     assert_eq!(e.status, EndorsementStatus::Endorsed);
 
     // The same signature can't be used twice.
@@ -248,7 +246,7 @@ fn disavowing_needs_only_the_wallet() {
     );
     send(env.svm(), disavow, &[&wallet]).unwrap();
     let e: riff_passport::Endorsement = fetch(
-        &env.riff.svm,
+        &env.svm,
         &endorsement_address(&passport_address(ARTIST_ID), &mint),
     );
     assert_eq!(e.status, EndorsementStatus::Disavowed);
@@ -287,7 +285,7 @@ fn changes_wallet_and_passkey_with_the_passkey() {
     );
     send_many(env.svm(), &[pre, set_wallet], &[&wallet, &new_wallet]).unwrap();
     assert_eq!(
-        fetch::<riff_passport::Passport>(&env.riff.svm, &passport).wallet,
+        fetch::<riff_passport::Passport>(&env.svm, &passport).wallet,
         new_wallet.pubkey()
     );
 
@@ -318,7 +316,7 @@ fn changes_wallet_and_passkey_with_the_passkey() {
     );
     send_many(env.svm(), &[pre_old, pre_new, set_passkey], &[&new_wallet]).unwrap();
     assert_eq!(
-        fetch::<riff_passport::Passport>(&env.riff.svm, &passport).passkey,
+        fetch::<riff_passport::Passport>(&env.svm, &passport).passkey,
         next.public()
     );
 }
@@ -348,7 +346,7 @@ fn adding_proofs_needs_the_passkey() {
     assert_error(send(env.svm(), add.clone(), &[&wallet]), E::PasskeyMissing);
     send_many(env.svm(), &[pre, add], &[&wallet]).unwrap();
     assert_eq!(
-        fetch::<riff_passport::Passport>(&env.riff.svm, &passport)
+        fetch::<riff_passport::Passport>(&env.svm, &passport)
             .proofs
             .len(),
         3

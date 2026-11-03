@@ -274,23 +274,14 @@ fn setup() -> Env {
     svm.add_program(damm::ID, include_bytes!("fixtures/cp_amm.so"))
         .unwrap();
     load_account_json(&mut svm, include_str!("fixtures/damm_v2_config.json"));
-    // The token programs mainnet runs, shared with riff's own tests.
-    svm.add_program(
-        TOKEN_PROGRAM_ID,
-        include_bytes!("../../riff/tests/fixtures/spl_token.so"),
-    )
-    .unwrap();
-    svm.add_program(
-        TOKEN_2022_ID,
-        include_bytes!("../../riff/tests/fixtures/spl_token_2022.so"),
-    )
-    .unwrap();
-    load_account_json(
-        &mut svm,
-        include_str!("../../riff/tests/fixtures/wsol_mint.json"),
-    );
+    // The token programs mainnet runs.
+    svm.add_program(TOKEN_PROGRAM_ID, include_bytes!("fixtures/spl_token.so"))
+        .unwrap();
+    svm.add_program(TOKEN_2022_ID, include_bytes!("fixtures/spl_token_2022.so"))
+        .unwrap();
+    load_account_json(&mut svm, include_str!("fixtures/wsol_mint.json"));
 
-    // LiteSVM deploys with no upgrade authority; set one (see riff's tests).
+    // LiteSVM deploys with no upgrade authority; set one (bincode: u32 tag, u64 slot, Option<Pubkey>).
     let admin = funded(&mut svm);
     let program_data =
         Pubkey::find_program_address(&[riff_dbc::ID.as_ref()], &bpf_loader_upgradeable::ID).0;

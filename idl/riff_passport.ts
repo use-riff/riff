@@ -91,161 +91,6 @@ export type RiffPassport = {
       ]
     },
     {
-      "name": "claimCoin",
-      "discriminator": [
-        222,
-        156,
-        154,
-        212,
-        188,
-        143,
-        84,
-        105
-      ],
-      "accounts": [
-        {
-          "name": "wallet",
-          "signer": true
-        },
-        {
-          "name": "verifier",
-          "docs": [
-            "riff's verifier, co-signing as riff's `claim_artist` requires."
-          ],
-          "signer": true
-        },
-        {
-          "name": "passport",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  115,
-                  115,
-                  112,
-                  111,
-                  114,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport.artistId",
-                "account": "passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "riffConfig"
-        },
-        {
-          "name": "coin",
-          "writable": true
-        },
-        {
-          "name": "riffProgram",
-          "address": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "collectFees",
-      "discriminator": [
-        164,
-        152,
-        207,
-        99,
-        30,
-        186,
-        19,
-        182
-      ],
-      "accounts": [
-        {
-          "name": "passport",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  97,
-                  115,
-                  115,
-                  112,
-                  111,
-                  114,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport.artistId",
-                "account": "passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "vault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  97,
-                  117,
-                  108,
-                  116
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "passport"
-              }
-            ]
-          }
-        },
-        {
-          "name": "coin",
-          "writable": true
-        },
-        {
-          "name": "riffProgram",
-          "address": "59MehWKuM1t6u3LAD4nyEg3kBw1HKq5EbS4ByKsosqtV"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "disavow",
       "discriminator": [
         175,
@@ -1502,19 +1347,6 @@ export type RiffPassport = {
   ],
   "events": [
     {
-      "name": "coinClaimed",
-      "discriminator": [
-        110,
-        254,
-        3,
-        227,
-        117,
-        77,
-        164,
-        24
-      ]
-    },
-    {
       "name": "endorsementChanged",
       "discriminator": [
         125,
@@ -1809,22 +1641,6 @@ export type RiffPassport = {
     }
   ],
   "types": [
-    {
-      "name": "coinClaimed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "passport",
-            "type": "pubkey"
-          },
-          {
-            "name": "mint",
-            "type": "pubkey"
-          }
-        ]
-      }
-    },
     {
       "name": "endorsement",
       "docs": [

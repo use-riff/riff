@@ -4,50 +4,6 @@ use riff_passport::{error::PassportError as E, PasskeyAction, ProofKind};
 use solana_keypair::Keypair;
 use solana_signer::Signer;
 
-fn claimed_coin(env: &mut Env, wallet: &Keypair) -> anchor_lang::prelude::Pubkey {
-    let mint = coin_with_fees(env, 3);
-    let verifier = env.verifier();
-    let ix = claim_coin_ix(env, &wallet.pubkey(), &mint);
-    send(env.svm(), ix, &[wallet, &verifier]).unwrap();
-    mint
-}
-
-#[test]
-fn the_vault_is_the_coins_artist_and_collects_its_fees() {
-    let mut env = setup();
-    let (wallet, _) = issued(&mut env);
-    let mint = claimed_coin(&mut env, &wallet);
-    let vault = vault_address(&passport_address(ARTIST_ID));
-    let coin: riff::Coin = fetch(&env.riff.svm, &crate::common::riff_env::coin_address(&mint));
-    assert_eq!(coin.artist, Some(vault));
-    let fees = coin.artist_fees;
-    assert!(fees > 0);
-
-    let before = lamports(&env.riff.svm, &vault);
-    let payer = funded_keypair(env.svm());
-    send(env.svm(), collect_ix(&mint), &[&payer]).unwrap();
-    assert_eq!(lamports(&env.riff.svm, &vault), before + fees);
-}
-
-#[test]
-fn claiming_needs_the_passport_wallet_and_riffs_verifier() {
-    let mut env = setup();
-    let (wallet, _) = issued(&mut env);
-    let mint = coin_with_fees(&mut env, 1);
-    let stranger = funded_keypair(env.svm());
-    let verifier = env.verifier();
-    let ix = claim_coin_ix(&env, &stranger.pubkey(), &mint);
-    assert_error(
-        send(env.svm(), ix, &[&stranger, &verifier]),
-        E::NotPassportWallet,
-    );
-    let fake = Keypair::new();
-    let mut ix = claim_coin_ix(&env, &wallet.pubkey(), &mint);
-    ix.accounts[1].pubkey = fake.pubkey();
-    let res = send(env.svm(), ix, &[&wallet, &fake]);
-    crate::common::riff_env::assert_riff_error(res, riff::error::ErrorCode::NotVerifier);
-}
-
 #[test]
 fn a_stolen_wallet_can_only_take_the_small_daily_amount() {
     let mut env = setup();
@@ -81,14 +37,14 @@ fn a_stolen_wallet_can_only_take_the_small_daily_amount() {
             amount,
         },
     );
-    let before = lamports(&env.riff.svm, &wallet.pubkey());
+    let before = lamports(&env.svm, &wallet.pubkey());
     send_many(
         env.svm(),
         &[pre, withdraw_ix(&wallet.pubkey(), amount, Some(proof))],
         &[&wallet],
     )
     .unwrap();
-    assert!(lamports(&env.riff.svm, &wallet.pubkey()) > before + amount - SOL / 100);
+    assert!(lamports(&env.svm, &wallet.pubkey()) > before + amount - SOL / 100);
 
     // A new day resets the free amount.
     advance_time(env.svm(), 24 * 60 * 60);
@@ -100,7 +56,7 @@ fn a_stolen_wallet_can_only_take_the_small_daily_amount() {
     .unwrap();
 
     // The vault keeps its rent; it can't be emptied below that.
-    let everything = lamports(&env.riff.svm, &vault);
+    let everything = lamports(&env.svm, &vault);
     let (proof, pre) = passkey.approve(
         &passport,
         nonce(&env),
@@ -217,7 +173,7 @@ fn recovers_a_lost_wallet_and_passkey_after_the_time_lock() {
     );
     advance_time(env.svm(), RECOVERY_DELAY);
     send(env.svm(), finalize_ix(), &[&anyone]).unwrap();
-    let passport: riff_passport::Passport = fetch(&env.riff.svm, &passport_address(ARTIST_ID));
+    let passport: riff_passport::Passport = fetch(&env.svm, &passport_address(ARTIST_ID));
     assert_eq!(passport.wallet, new_wallet.pubkey());
     assert_eq!(passport.passkey, new_passkey.public());
     assert!(passport.recovery.is_none());
@@ -265,7 +221,7 @@ fn the_artist_vetoes_with_their_passkey_or_a_guardian_proof() {
         &[&wallet],
     )
     .unwrap();
-    assert!(fetch::<riff_passport::Passport>(&env.riff.svm, &passport)
+    assert!(fetch::<riff_passport::Passport>(&env.svm, &passport)
         .recovery
         .is_none());
 
@@ -294,7 +250,7 @@ fn the_artist_vetoes_with_their_passkey_or_a_guardian_proof() {
         &[&phone],
     )
     .unwrap();
-    assert!(fetch::<riff_passport::Passport>(&env.riff.svm, &passport)
+    assert!(fetch::<riff_passport::Passport>(&env.svm, &passport)
         .recovery
         .is_none());
 
@@ -404,7 +360,7 @@ fn only_one_recovery_at_a_time() {
 fn a_revoked_passport_can_do_nothing() {
     let mut env = setup();
     let (wallet, _) = issued(&mut env);
-    let admin = env.riff.admin.insecure_clone();
+    let admin = env.admin.insecure_clone();
     let revoke = ix(
         riff_passport::instruction::RevokePassport {
             reason: "issued to the wrong person".into(),
@@ -432,8 +388,4 @@ fn a_revoked_passport_can_do_nothing() {
         ),
         E::Revoked,
     );
-    let mint = coin_with_fees(&mut env, 1);
-    let verifier = env.verifier();
-    let ix = claim_coin_ix(&env, &wallet.pubkey(), &mint);
-    assert_error(send(env.svm(), ix, &[&wallet, &verifier]), E::Revoked);
 }

@@ -14,17 +14,15 @@ default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "riff/idl-build"]
+idl-build = ["anchor-lang/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
-# The devnet builds use this feature: riff for Raydium's devnet addresses, the
-# passport for a devnet-only `reset_passport` (see src/instructions/devnet.rs).
-devnet = ["riff/devnet"]
+# The devnet build adds the devnet-only reset_passport.
+devnet = []
 
 [dependencies]
 anchor-lang = { version = "1.2.0", features = ["init-if-needed"] }
-riff = { path = "../riff", features = ["cpi"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 solana-instructions-sysvar = "3"
 solana-sha256-hasher = { version = "3", features = ["sha2"] }

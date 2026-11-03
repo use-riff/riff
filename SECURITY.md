@@ -10,6 +10,6 @@ report it privately and don't open a public issue:
 Include what you found, how to reproduce it, and the impact you expect. We'll
 acknowledge reports as soon as we can and keep you updated while we fix it.
 
-In scope: the program in `programs/riff/`, deployed at the addresses in
+In scope: the programs in `programs/riff-dbc/` and `programs/riff-passport/`, deployed at the addresses in
 `deployments.json`. The app and other off-chain services aren't in this
 repository.
