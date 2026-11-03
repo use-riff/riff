@@ -51,19 +51,18 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 
 ## Before launch day (humans)
 
-- [ ] External audit done, and its findings fixed, on the commit below.
-- [ ] Legal and regulatory review of artist-named coins, charity claims, terms and risks.
+- [x] Decided: launch as an **unaudited beta** (no external audit for now). Say so everywhere; never write "audited". Keep exposure small (launch-buy cap) and the upgrade authority behind a time-locked multisig. Revisit an audit, contest or bounty when funds allow.
 - [ ] Squads vaults created; signers hold separate hardware wallets; time lock set.
 - [ ] Charity shortlist of organisations that accept crypto and have consented.
 - [ ] Private RPC in `~/.config/riff/mainnet/rpc-url` and in Vercel.
 
 ## Launch-day commands
 
-Replace `<sha>` with the audited commit. Each dry run must look right before its `--yes`.
+Replace `<sha>` with the commit you are deploying. Each dry run must look right before its `--yes`.
 
 ```bash
 git checkout <sha>
-make verifiable                                   # compare both hashes with the audited ones
+make verifiable                                   # compare both hashes with the ones in the audit package
 make deploy-dbc-mainnet                           # dry run: prints the hash
 make deploy-passport-mainnet
 make deploy-dbc-mainnet CONFIRM=mainnet           # costs real SOL
