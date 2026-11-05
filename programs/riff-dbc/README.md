@@ -36,6 +36,8 @@ The trade fee is 2%, the same from the first trade on:
 | Launcher | 0.3% | 37.5% of the partner share: `launcher_share_bps = 3750` |
 | riff | 0.5% | The rest of the partner share |
 
+Launching also costs a fixed launch fee (`LAUNCH_FEE_LAMPORTS`, 0.1 SOL), which `create_coin` pays to the treasury as plain SOL.
+
 The coin graduates at about 72 SOL in the curve (30 → 300 SOL market cap; devnet 100x less). After graduation the DAMM v2 pool charges 1%, in SOL only. All liquidity is locked for good, half on the creator's side (the escrow) and half on the partner's (the fee authority), and each side's LP fees follow the same split as before.
 
 ## The launch buy

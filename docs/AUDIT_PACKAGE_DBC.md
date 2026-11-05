@@ -32,7 +32,7 @@ Read first: `programs/riff-dbc/README.md`, `programs/riff-passport/README.md`.
 
 ## Money flow
 
-Trade fee 2%: Meteora 0.4%, artist 0.8%, launcher 0.3%, riff 0.5%. After graduation: 1% LP fee in SOL, on two permanently locked positions (50/50). The creator side follows the artist's route, the partner side the launcher and riff's split.
+Launch fee: 0.1 SOL per coin (`LAUNCH_FEE_LAMPORTS`), paid to `config.treasury` as plain SOL by `create_coin`. Trade fee 2%: Meteora 0.4%, artist 0.8%, launcher 0.3%, riff 0.5%. After graduation: 1% LP fee in SOL, on two permanently locked positions (50/50). The creator side follows the artist's route, the partner side the launcher and riff's split.
 
 ## Trust model
 
@@ -75,6 +75,7 @@ Tested against the real mainnet binaries (hashes in the `Makefile`) unless marke
 
 **`create_coin`:**
 - Anyone can launch for any artist ID in the passport format; the coin's name and symbol are free text. Impersonation is handled by claims and endorsements, not here.
+- The launch fee is charged inside the handler, so a CPI caller pays it too. The receiver is bound to `config.treasury`, and the launcher must sign.
 - `check_launch_buy` reads top-level instructions only. A swap nested in another program, or `create_coin` called by CPI, escapes the cap. Those buys pay the same fees. Documented, not treated as security.
 - It looks at Meteora instructions naming the pool as their third account (where swap and swap2 have it); only `swap` is allowed, and its amount counts. A sell counts its token amount against the cap, which only makes it stricter.
 

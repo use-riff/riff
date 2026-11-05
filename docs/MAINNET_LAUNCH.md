@@ -9,6 +9,7 @@ A plan, not a record: **nothing here has been run on mainnet.** Every step that 
 | Curve | 30 → 300 SOL market cap, about 72 SOL in the curve at graduation | `config/gen-config.mjs` | Fixed in riff's Meteora config once created. A different curve needs a new config |
 | Trade fee | 2%: 0.8% artist, 0.8% partner, 0.4% Meteora | `gen-config.mjs` | Fixed the same way |
 | Graduated pool | DAMM v2, 1% in SOL, all liquidity locked 50/50 | `gen-config.mjs` | Fixed the same way |
+| Launch fee | 0.1 SOL a coin, to the treasury | `LAUNCH_FEE_LAMPORTS` in `programs/riff-dbc/src/lib.rs` | Funds promotion and puts a price on spam. A different amount needs a program upgrade |
 | Launcher share | 3750 bps of the partner share (0.3% of a trade) | `mainnet.params.json` | Admin can change it |
 | `max_launch_buy` | 1 SOL | `mainnet.params.json` | Top-level swaps only: see the audit package |
 | Claim window | 90 days (7,776,000 s) | `mainnet.params.json` | Decided 2026-09-27 for the old program (`riff-site/deploy/mainnet.json`), and kept. New coins only if changed |

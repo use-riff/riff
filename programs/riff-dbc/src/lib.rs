@@ -42,6 +42,9 @@ pub const UNWRAP_SEED: &[u8] = b"unwrap";
 pub const MAX_ARTIST_ID_LEN: usize = 64;
 pub const MAX_ARTIST_NAME_LEN: usize = 64;
 pub const BPS: u64 = 10_000;
+/// What launching a coin costs, paid to riff's treasury. It funds promotion of
+/// coins and puts a price on spam. A constant, so changing it means an upgrade.
+pub const LAUNCH_FEE_LAMPORTS: u64 = 100_000_000;
 
 #[program]
 pub mod riff_dbc {

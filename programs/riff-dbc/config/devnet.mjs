@@ -458,6 +458,7 @@ async function launch(config) {
       tokenProgram: TOKEN_2022_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
+      treasury: config.treasury,
     })
     .instruction();
   const launcherBase = getAssociatedTokenAddressSync(c.mint, deployer.publicKey, false, TOKEN_2022_PROGRAM_ID);

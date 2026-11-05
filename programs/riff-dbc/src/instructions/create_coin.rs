@@ -5,6 +5,7 @@ use anchor_spl::{
     token_2022::Token2022,
 };
 
+use anchor_lang::system_program::{self, Transfer};
 use anchor_lang::Discriminator;
 use solana_instructions_sysvar::load_instruction_at_checked;
 
@@ -76,12 +77,25 @@ pub struct CreateCoin<'info> {
     pub token_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+    /// CHECK: riff's treasury, which receives the launch fee as plain SOL.
+    #[account(mut, address = config.treasury @ RiffDbcError::WrongReceiver)]
+    pub treasury: UncheckedAccount<'info>,
 }
 
 pub fn handle_create_coin<'info>(
     ctx: Context<'info, CreateCoin<'info>>,
     args: CreateCoinArgs,
 ) -> Result<()> {
+    system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.key(),
+            Transfer {
+                from: ctx.accounts.launcher.to_account_info(),
+                to: ctx.accounts.treasury.to_account_info(),
+            },
+        ),
+        LAUNCH_FEE_LAMPORTS,
+    )?;
     let artist_id = args.artist_id.trim().to_string();
     let artist_name = args.artist_name.trim().to_string();
     // A passport can only ever exist for this format: a coin with any other
