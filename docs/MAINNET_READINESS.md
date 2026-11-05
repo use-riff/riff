@@ -7,10 +7,10 @@ A running record of what's done, with evidence, and what's left for humans. Noth
 | 1 | Devnet Passport upgrade, full devnet e2e with the claim | **Done** (2026-10-27) |
 | 2 | riff-dbc hardening (late-claim LP fees, events, threat review, tests) | **Done** |
 | 3 | Audit package for riff-dbc + riff-passport | **Done**, verifiable build included; the audit itself is for humans |
-| 4 | riffpad.fun on riff-dbc | **PR open** (use-riff/riff-site#102), waiting for the owner's OK because merging changes the live devnet site |
+| 4 | riffpad.fun on riff-dbc | **Done**: use-riff/riff-site#102 merged |
 | 5 | Mainnet parameters and keys plan | **Written** ([`MAINNET_LAUNCH.md`](MAINNET_LAUNCH.md)); nothing executed |
 | 6 | Operations: cranks, alerts, runbook, fee and charity ledger | Not started |
-| 7 | Retire the old `riff` program from the app | **Done in this repo** (owner's decision: removed). The app's part is in use-riff/riff-site#102. Devnet's passport still runs the older binary until the deployer has SOL |
+| 7 | Retire the old `riff` program from the app | **Done in this repo** (owner's decision: removed). The app's part was use-riff/riff-site#102, merged. Devnet's passport still runs the older binary until the deployer has SOL |
 | 8 | Go/no-go report | Not started |
 
 ## 1. Devnet Passport upgrade
@@ -90,3 +90,10 @@ use-riff/riff-site#102. Tested on devnet:
 Removed with the owner's agreement: `programs/riff`, `vectors/`, its IDL and Raydium fixtures. riff-passport's `claim_coin` and `collect_fees` went with it, along with the dependency. The passport's binary went from 515,528 to 481,888 bytes (verifiable builds), and its account layout didn't change. The old program stays deployed on devnet, unused: address in `deployments.json`.
 
 Official estate coins are dropped for now (owner's decision): riff-dbc only pays passport vaults, and passports aren't issued for artists who have passed away. Official charity coins go to charity when the claim window ends.
+
+## Launch fee (2026-11-05)
+
+`create_coin` charges 0.1 SOL to the treasury (use-riff/riff#22). Deployed to devnet ([tx](https://explorer.solana.com/tx/3Ljep9pMnPaBzC6WtdZYRUr12Sg3Q1BAcj7EAKS6UuAr3VTFhvNwEoFqZQ6XGwycKapUzdHaUuoYTymYaPq18rPG?cluster=devnet), sha256 `4f9e52bc…`, from `make build`). `node devnet.mjs e2e` passed on it, and the treasury received exactly 0.1 SOL for the launch. A launch through riffpad.fun (use-riff/riff-site#108) works too.
+
+**Left:** `make verifiable` and the hashes in the audit package, since the program changed.
+

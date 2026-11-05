@@ -19,8 +19,8 @@
         "config": "6CLkcP4aNj9dkQRy6PbYgPkhyZrxzFUke621hzAJrDyH",
         "meteoraConfig": "5m2xhUh7aJJ2KfwkHk7qNCCDaUzmzp15detHbZA1TfsZ",
         "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
-        "notes": "0.3 -> 3 SOL market cap (graduates at ~0.72 SOL), 0.01 SOL launch buy cap, 1-hour claim window. Set up with programs/riff-dbc/config/devnet.mjs.",
-        "binarySha256": "cfaa3131e51bcc95cade6eb299742f90713688d33ca0e283b6cab6757b5846b3"
+        "notes": "0.3 -> 3 SOL market cap (graduates at ~0.72 SOL), 0.01 SOL launch buy cap, 1-hour claim window, 0.1 SOL launch fee. Set up with programs/riff-dbc/config/devnet.mjs.",
+        "binarySha256": "4f9e52bc7f5f0ae4a6a59383e5356dbcdfae87a2d11e25b4da8907beb0f71607"
       },
       "mainnet-beta": {
         "status": "not deployed",
