@@ -961,6 +961,10 @@ export type RiffDbc = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "treasury",
+          "writable": true
         }
       ],
       "args": [

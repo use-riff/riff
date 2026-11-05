@@ -446,6 +446,7 @@ fn create_coin_ix(env: &Env, launcher: &Pubkey, mint: &Pubkey) -> Instruction {
             token_program: TOKEN_2022_ID,
             associated_token_program: ATA_PROGRAM_ID,
             system_program: system_program::ID,
+            treasury: env.treasury.pubkey(),
         }
         .to_account_metas(None),
         data: riff_dbc::instruction::CreateCoin {
@@ -1902,4 +1903,28 @@ fn every_money_move_emits_an_event() {
     let lp: FeesCollected = event(&res.logs);
     assert!(lp.lp);
     assert!(lp.to_artist_vault > 0);
+}
+
+#[test]
+fn launching_pays_the_fee_to_the_treasury_and_only_there() {
+    let mut env = setup();
+    let treasury = env.treasury.pubkey();
+    let before = env.svm.get_balance(&treasury).unwrap();
+    create_coin(&mut env);
+    assert_eq!(
+        env.svm.get_balance(&treasury).unwrap() - before,
+        riff_dbc::LAUNCH_FEE_LAMPORTS
+    );
+
+    // Any other receiver is refused, so nobody can launch by paying themselves.
+    let launcher = funded(&mut env.svm);
+    let mint = Keypair::new();
+    let mut ix = create_coin_ix(&env, &launcher.pubkey(), &mint.pubkey());
+    ix.accounts.last_mut().unwrap().pubkey = launcher.pubkey();
+    let res = send(
+        &mut env.svm,
+        &[compute_budget(600_000), ix],
+        &[&launcher, &mint],
+    );
+    assert!(res.is_err());
 }
