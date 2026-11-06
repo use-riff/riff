@@ -95,5 +95,5 @@ Official estate coins are dropped for now (owner's decision): riff-dbc only pays
 
 `create_coin` charges 0.1 SOL to the treasury (use-riff/riff#22). Deployed to devnet ([tx](https://explorer.solana.com/tx/3Ljep9pMnPaBzC6WtdZYRUr12Sg3Q1BAcj7EAKS6UuAr3VTFhvNwEoFqZQ6XGwycKapUzdHaUuoYTymYaPq18rPG?cluster=devnet), sha256 `4f9e52bc…`, from `make build`). `node devnet.mjs e2e` passed on it, and the treasury received exactly 0.1 SOL for the launch. A launch through riffpad.fun (use-riff/riff-site#108) works too.
 
-**Left:** `make verifiable` and the hashes in the audit package, since the program changed.
+`make verifiable` from a clean clone of `fd85fd2` (2026-11-06): riff-dbc's new hashes are in the audit package; riff-passport's binary is unchanged. Devnet still runs the `make build` binary, not this one.
 

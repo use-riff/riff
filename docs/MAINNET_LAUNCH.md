@@ -27,7 +27,7 @@ Keep them in `~/.config/riff/mainnet`, never in a repo.
 | Role | What it can do | Holder |
 |---|---|---|
 | Upgrade authority (both programs) | Replace the code, so **everything** | **Squads vault with a time lock** (24–48 h), after launch-day handoff |
-| riff-dbc admin, passport admin | Redirect treasury and charity, change the verifier; revoke and reissue passports | The same Squads vault. riff-dbc's handoff has no acceptance step, so check the address twice |
+| riff-dbc admin, passport admin | Redirect treasury and charity, change the verifier; revoke and reissue passports | The same Squads vault. riff-dbc's handoff has no acceptance step, so check the address twice. **The passport admin can never be changed**: `update_config` has no admin field, so whoever signs `initialize_config` is admin for good. The vault must sign it (see the launch steps) |
 | Treasury | Receives riff's fees | Separate Squads vault |
 | Charity | Receives unclaimed artist fees; donates by hand | Separate Squads vault, used for nothing else |
 | Verifier | Co-signs claims and proofs. Vouches for the LP position in late claims | Hot key on the server only (`VERIFIER_SECRET_KEY`); never in a multisig. New key for mainnet |
@@ -43,7 +43,7 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 
 | Item | SOL |
 |---|---|
-| riff-dbc program rent (467,528 bytes) | 2.38 |
+| riff-dbc program rent (468,496 bytes) | 2.38 |
 | riff-passport program rent (481,888 bytes) | 2.44 |
 | Deploy buffers, the same again; refunded when the deploy finishes | about 4.9 (back) |
 | riff-dbc and passport configs, fees vault, Meteora config, network and priority fees | about 0.05 (estimate) |
@@ -77,14 +77,20 @@ cd programs/riff-dbc/config && npm ci
 # fill in mainnet.params.json, then:
 node mainnet.mjs setup                            # dry run
 node mainnet.mjs setup --yes
-(cd ~/riff-site && pnpm -C scripts passport-config --cluster mainnet)        # dry run; then --yes
+# Passport config: its admin is fixed at initialization, so the vault signs it, not the deployer.
+solana program set-upgrade-authority 2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj \
+  --new-upgrade-authority <ADMIN VAULT> --skip-new-upgrade-authority-signer-check \
+  --keypair ~/.config/riff/mainnet/deployer.json --url mainnet-beta
+(cd ~/riff-site && pnpm -C scripts passport-config --cluster mainnet)        # dry run only: prints the settings
+# ...then propose initialize_config with those settings in Squads, signed by the vault,
+# and check the passport config's admin is the vault.
 
 # A small real coin, to check before announcing: launch, trade, crank, claim.
 # Then, while this is still the deployer's to change:
 node mainnet.mjs handoff                          # dry run
 node mainnet.mjs handoff --yes
-# ...then the set-upgrade-authority commands it prints, for both programs,
-# and the passport's admin handoff.
+# ...then the set-upgrade-authority command it prints for riff-dbc
+# (the passport's went to the vault before its config).
 node mainnet.mjs status
 ```
 
