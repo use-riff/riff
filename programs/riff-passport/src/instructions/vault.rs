@@ -55,7 +55,9 @@ pub fn handle_withdraw(
         .withdrawn_in_window
         .checked_add(amount)
         .ok_or(error!(PassportError::MathOverflow))?;
-    let with_passkey = spent > accounts.config.free_withdraw_per_day;
+    // While a recovery is pending, the wallet may be the reason for it (lost
+    // or stolen), so even the daily amount needs the passkey.
+    let with_passkey = spent > accounts.config.free_withdraw_per_day || passport.recovery.is_some();
     if with_passkey {
         let proof = passkey_proof.ok_or(error!(PassportError::PasskeyRequired))?;
         let action = PasskeyAction::Withdraw {

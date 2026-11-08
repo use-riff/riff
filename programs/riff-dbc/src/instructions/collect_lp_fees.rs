@@ -16,6 +16,11 @@ use crate::{cp_amm, error::RiffDbcError, events::FeesCollected, instructions::sh
 ///
 /// Meteora checks that each signer owns its position and that the pool is
 /// this coin's: its token A must be the coin's mint.
+///
+/// The partner side's accounts (launcher's and treasury's accounts, partner
+/// position and its NFT account) are optional, together: without them the
+/// partner position's fees wait for a later call, so a launcher who closes
+/// their WSOL account can't hold up the artist's share.
 #[derive(Accounts)]
 pub struct CollectLpFees<'info> {
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
@@ -37,9 +42,9 @@ pub struct CollectLpFees<'info> {
     #[account(mut, address = shared::escrow_base_address(&escrow.key(), &base_mint.key()))]
     pub escrow_base_account: UncheckedAccount<'info>,
     #[account(mut, token::mint = quote_mint, constraint = launcher_quote_account.owner == coin.launcher @ RiffDbcError::WrongReceiver)]
-    pub launcher_quote_account: Box<Account<'info, TokenAccount>>,
+    pub launcher_quote_account: Option<Box<Account<'info, TokenAccount>>>,
     #[account(mut, token::mint = quote_mint, constraint = treasury_quote_account.owner == config.treasury @ RiffDbcError::WrongReceiver)]
-    pub treasury_quote_account: Box<Account<'info, TokenAccount>>,
+    pub treasury_quote_account: Option<Box<Account<'info, TokenAccount>>>,
     /// CHECK: checked by Meteora.
     pub damm_pool_authority: UncheckedAccount<'info>,
     /// CHECK: checked by Meteora.
@@ -52,9 +57,9 @@ pub struct CollectLpFees<'info> {
     pub creator_position_nft_account: UncheckedAccount<'info>,
     /// CHECK: checked by Meteora.
     #[account(mut)]
-    pub partner_position: UncheckedAccount<'info>,
+    pub partner_position: Option<UncheckedAccount<'info>>,
     /// CHECK: checked by Meteora (held by the fee authority).
-    pub partner_position_nft_account: UncheckedAccount<'info>,
+    pub partner_position_nft_account: Option<UncheckedAccount<'info>>,
     /// CHECK: checked by Meteora.
     #[account(mut)]
     pub token_a_vault: UncheckedAccount<'info>,
@@ -75,8 +80,8 @@ pub struct CollectLpFees<'info> {
 impl<'info> CollectLpFees<'info> {
     fn claim(
         &self,
-        position: &UncheckedAccount<'info>,
-        nft_account: &UncheckedAccount<'info>,
+        position: &AccountInfo<'info>,
+        nft_account: &AccountInfo<'info>,
         to: AccountInfo<'info>,
         owner: &UncheckedAccount<'info>,
         signer: &[&[u8]],
@@ -85,8 +90,8 @@ impl<'info> CollectLpFees<'info> {
             &self.damm_program.to_account_info(),
             &self.damm_pool_authority.to_account_info(),
             &self.damm_pool.to_account_info(),
-            &position.to_account_info(),
-            &nft_account.to_account_info(),
+            position,
+            nft_account,
             &self.escrow_base_account.to_account_info(),
             &to,
             &self.token_a_vault.to_account_info(),
@@ -107,34 +112,50 @@ pub fn handle_collect_lp_fees<'info>(ctx: Context<'info, CollectLpFees<'info>>) 
     let fee_authority_bump = [a.config.fee_authority_bump];
     let fee_signer: &[&[u8]] = &[FEE_AUTHORITY_SEED, &fee_authority_bump];
 
-    let before = a.fees_vault.amount;
-    a.claim(
-        &a.partner_position,
-        &a.partner_position_nft_account,
-        a.fees_vault.to_account_info(),
-        &a.fee_authority,
-        fee_signer,
+    let receivers = shared::partner_receivers(
+        a.launcher_quote_account.as_deref(),
+        a.treasury_quote_account.as_deref(),
     )?;
-    a.fees_vault.reload()?;
-    let partner_share = a.fees_vault.amount - before;
-    let to_launcher = shared::split_partner_share(
-        &a.token_quote_program.to_account_info(),
-        &a.fees_vault,
-        &a.launcher_quote_account.to_account_info(),
-        &a.treasury_quote_account.to_account_info(),
-        &a.fee_authority.to_account_info(),
-        fee_signer,
-        a.config.launcher_share_bps,
-        partner_share,
-    )?;
-    a.coin.launcher_fees_total += to_launcher;
+    let position = match (&a.partner_position, &a.partner_position_nft_account) {
+        (Some(p), Some(n)) => Some((p.to_account_info(), n.to_account_info())),
+        (None, None) => None,
+        _ => return err!(RiffDbcError::PartnerAccountsIncomplete),
+    };
+    let (mut to_launcher, mut partner_share) = (0, 0);
+    match (receivers, position) {
+        (Some((launcher_account, treasury_account)), Some((position, nft_account))) => {
+            let before = a.fees_vault.amount;
+            a.claim(
+                &position,
+                &nft_account,
+                a.fees_vault.to_account_info(),
+                &a.fee_authority,
+                fee_signer,
+            )?;
+            a.fees_vault.reload()?;
+            partner_share = a.fees_vault.amount - before;
+            to_launcher = shared::split_partner_share(
+                &a.token_quote_program.to_account_info(),
+                &a.fees_vault,
+                &launcher_account,
+                &treasury_account,
+                &a.fee_authority.to_account_info(),
+                fee_signer,
+                a.coin.launcher_share_bps(&a.config),
+                partner_share,
+            )?;
+            a.coin.launcher_fees_total += to_launcher;
+        }
+        (None, None) => {}
+        _ => return err!(RiffDbcError::PartnerAccountsIncomplete),
+    }
 
     let mint = a.base_mint.key();
     let escrow_bump = [a.coin.escrow_bump];
     let before = a.artist_vault.amount;
     a.claim(
-        &a.creator_position,
-        &a.creator_position_nft_account,
+        &a.creator_position.to_account_info(),
+        &a.creator_position_nft_account.to_account_info(),
         a.artist_vault.to_account_info(),
         &a.escrow,
         &shared::escrow_seeds(&mint, &escrow_bump),

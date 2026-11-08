@@ -48,13 +48,17 @@ A public, hack-resistant identity for musicians on Solana.
    - the precompile checked this passport's passkey;
    - the challenge is the hash of this exact action and the passport's nonce, so no signature works twice;
    - the relying-party hash is riff's site, so a signature from a phishing domain fails;
+   - the page that asked was riff's own: an https origin on riff's site or a subdomain, at the top level (not embedded in another site, and not an app or a "related origin" on another domain);
    - the user was present;
    - the user was verified.
 
 3. **Recovery with a time-lock and a veto.** If the artist loses a wallet or a passkey:
    - A new wallet with fresh proofs (again two sources, one strong) and a new passkey can request a recovery. It must be a different wallet from the passport's, and its proofs must be newer than the passport's current wallet, so a stolen wallet can't reuse its old proofs.
-   - The recovery waits out a public time-lock (72 hours on mainnet).
+   - The recovery waits out a public time-lock (72 hours on mainnet; the program refuses less than 24).
    - During the time-lock, the old passkey or any *guardian* can veto it. A guardian is a fresh proof of the same source as one already on the passport, such as the artist's YouTube channel (any code in the artist's Spotify bio counts, since only the artist can edit it). A stolen wallet alone can do nothing.
+   - Changing the wallet, the passkey or the proofs (which all need the passkey) also ends a pending recovery, so an artist who reacts that way is safe too.
+   - Only one recovery can be pending. So that nobody can keep the slot by re-requesting each time it's vetoed, a guardian can replace a pending recovery with its own (`contest_recovery`); the time-lock starts again.
+   - While a recovery is pending, every withdrawal needs the passkey: the wallet may be the reason for the recovery.
 
 4. **Earnings belong to the passport.** When a coin is claimed with
    [riff-dbc](../riff-dbc/README.md), the passport's vault becomes the coin's
@@ -72,7 +76,7 @@ A public, hack-resistant identity for musicians on Solana.
    proofs and a new passkey. The vault stays, so what was claimed is the
    artist's, and the reissued passport starts a new probation.
 
-6. **Endorsements anyone can read.** `endorse` (wallet and passkey) and `disavow` (wallet alone: always safe) write one account per coin mint, on any launchpad. It lives at `["endorse", passport, mint]`, so any wallet, explorer or launchpad can check whether the verified artist stands behind a coin. An endorsement (or disavowal) counts only while the passport isn't revoked and if its `updated_at` is at or after the passport's `issued_at`: a reissue voids whatever the previous holder wrote. Apps may also flag passports younger than a week as new.
+6. **Endorsements anyone can read.** `endorse` (wallet and passkey) and `disavow` (wallet alone: always safe) write one account per coin mint, on any launchpad. It lives at `["endorse", passport, mint]`, so any wallet, explorer or launchpad can check whether the verified artist stands behind a coin. An endorsement (or disavowal) counts only while the passport isn't revoked and if its `updated_at` is at or after the passport's `issued_at`: a reissue voids whatever the previous holder wrote. A disavowal (wallet alone) should also count only if `updated_at` is at or after `wallet_since`, so one written by a wallet the artist has since moved away from (a stolen one, say) stops counting once the passport moves to a new wallet. Apps may also flag passports younger than a week as new.
 
 ## Accounts
 
@@ -88,16 +92,18 @@ A public, hack-resistant identity for musicians on Solana.
 
 | Instruction | Who |
 |---|---|
-| `initialize_config`, `update_config` | the program's upgrade authority, then the admin |
+| `initialize_config`, `update_config` | the program's upgrade authority, then the admin, within fixed bounds: time-lock at least `MIN_RECOVERY_DELAY` (24 h), free daily withdrawal at most 1 SOL, proof age at most 30 days; the passkey site can't change |
+| `propose_admin`, `accept_admin` | the admin proposes a new admin, who accepts |
 | `record_proof` | the wallet plus riff's verifier |
 | `issue_passport` | the wallet, with 2 or more fresh proofs and a passkey signature |
 | `add_proofs`, `set_wallet`, `set_passkey` | the wallet plus the passkey |
 | `endorse` | the wallet plus the passkey, after the probation |
 | `disavow` | the wallet |
 | `request_recovery` | a new wallet, with fresh proofs and a new passkey |
+| `contest_recovery` | like `request_recovery`, with a guardian among the proofs: replaces a pending recovery |
 | `veto_recovery` | the passkey, or a guardian proof |
 | `finalize_recovery` | anyone, after the time-lock |
-| `withdraw` | after the probation: the wallet up to the daily amount; the passkey for more |
+| `withdraw` | after the probation: the wallet up to the daily amount; the passkey for more, and for any amount while a recovery is pending |
 | `revoke_passport` | the admin, publicly logged |
 | `reissue_passport` | the admin plus the artist's wallet, with fresh proofs and a new passkey; only for a revoked passport |
 | `reset_passport` | **devnet build only** (`--features devnet`): the admin closes a passport and its vault so a demo can issue it again; absent from the mainnet build |
@@ -125,6 +131,18 @@ A public, hack-resistant identity for musicians on Solana.
   claims on new passports and large claims before co-signing them, and riff
   can revoke and reissue. An artist who already has a passport is protected
   by their passkey and the recovery time-lock.
+
+- riff's verifier key is the most sensitive key: whoever holds it can record
+  proofs for any wallet, so can issue a passport for an artist who has none
+  or start a recovery on any passport. The probation, the time-lock, vetoes
+  and revocation limit what that achieves, but only if someone is watching:
+  riff monitors every issue and recovery (see `docs/MAINNET_LAUNCH.md`).
+- The admin can revoke and reissue any passport, and set the verifier, so
+  together they can move a passport and its vault to a new wallet after a
+  probation of at least 24 hours. That's why the admin is a time-locked
+  multisig.
+- A passport that is revoked and never reissued keeps its vault's funds
+  until riff reissues it to the artist.
 
 ## Tests
 

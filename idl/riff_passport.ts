@@ -14,6 +14,72 @@ export type RiffPassport = {
   },
   "instructions": [
     {
+      "name": "acceptAdmin",
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "newAdmin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingAdmin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  100,
+                  109,
+                  105,
+                  110
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "addProofs",
       "discriminator": [
         68,
@@ -80,6 +146,95 @@ export type RiffPassport = {
         }
       ],
       "args": [
+        {
+          "name": "passkeyProof",
+          "type": {
+            "defined": {
+              "name": "passkeyProof"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "contestRecovery",
+      "docs": [
+        "A guardian replaces a pending recovery with its own."
+      ],
+      "discriminator": [
+        219,
+        158,
+        227,
+        54,
+        133,
+        8,
+        138,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "newWallet",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "passport",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  97,
+                  115,
+                  115,
+                  112,
+                  111,
+                  114,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "passport.artistId",
+                "account": "passport"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newPasskey",
+          "type": {
+            "array": [
+              "u8",
+              33
+            ]
+          }
+        },
         {
           "name": "passkeyProof",
           "type": {
@@ -528,6 +683,86 @@ export type RiffPassport = {
               "name": "passkeyProof"
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "proposeAdmin",
+      "docs": [
+        "The admin proposes a new admin, who must accept."
+      ],
+      "discriminator": [
+        121,
+        214,
+        199,
+        212,
+        87,
+        39,
+        117,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingAdmin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  100,
+                  109,
+                  105,
+                  110
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newAdmin",
+          "type": "pubkey"
         }
       ]
     },
@@ -1319,6 +1554,19 @@ export type RiffPassport = {
       ]
     },
     {
+      "name": "pendingAdmin",
+      "discriminator": [
+        220,
+        45,
+        135,
+        16,
+        196,
+        153,
+        181,
+        56
+      ]
+    },
+    {
       "name": "proofRecord",
       "discriminator": [
         237,
@@ -1638,6 +1886,16 @@ export type RiffPassport = {
       "code": 6026,
       "name": "sameWallet",
       "msg": "Recovery must move the passport to a new wallet"
+    },
+    {
+      "code": 6027,
+      "name": "recoveryOutdated",
+      "msg": "The passport's wallet changed after this recovery was requested"
+    },
+    {
+      "code": 6028,
+      "name": "rpIdImmutable",
+      "msg": "The passkey site can't change: every passkey is bound to it"
     }
   ],
   "types": [
@@ -1999,6 +2257,26 @@ export type RiffPassport = {
       }
     },
     {
+      "name": "pendingAdmin",
+      "docs": [
+        "A proposed new admin, waiting for that key to accept. A separate account,",
+        "so the config's layout stays as deployed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "newAdmin",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "proofKind",
       "docs": [
         "The ways an artist can prove who they are."
@@ -2220,6 +2498,19 @@ export type RiffPassport = {
           {
             "name": "effectiveAt",
             "type": "i64"
+          },
+          {
+            "name": "proofs",
+            "docs": [
+              "The proofs the request was made with, for whoever watches recoveries."
+            ],
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "proofKind"
+                }
+              }
+            }
           }
         ]
       }
@@ -2326,6 +2617,11 @@ export type RiffPassport = {
       "name": "passportSeed",
       "type": "bytes",
       "value": "[112, 97, 115, 115, 112, 111, 114, 116]"
+    },
+    {
+      "name": "pendingAdminSeed",
+      "type": "bytes",
+      "value": "[112, 101, 110, 100, 105, 110, 103, 95, 97, 100, 109, 105, 110]"
     },
     {
       "name": "proofSeed",

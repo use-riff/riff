@@ -270,13 +270,24 @@ impl TestPasskey {
     /// What a browser returns from navigator.credentials.get() for `challenge`,
     /// and the secp256r1 precompile instruction that checks the signature.
     pub fn sign(&self, challenge: &[u8; 32]) -> (PasskeyProof, Instruction) {
+        let origin = format!("https://{}", self.rp_id);
+        self.sign_from(challenge, &origin, r#","crossOrigin":false"#)
+    }
+
+    /// Like `sign`, from another origin and with other trailing
+    /// clientDataJSON members (`extra` starts with a comma).
+    pub fn sign_from(
+        &self,
+        challenge: &[u8; 32],
+        origin: &str,
+        extra: &str,
+    ) -> (PasskeyProof, Instruction) {
         let mut authenticator_data = Sha256::digest(self.rp_id.as_bytes()).to_vec();
         authenticator_data.push(if self.verified { 0x05 } else { 0x01 });
         authenticator_data.extend_from_slice(&1u32.to_be_bytes());
         let challenge_b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(challenge);
         let client_data_json = format!(
-            r#"{{"type":"webauthn.get","challenge":"{challenge_b64}","origin":"https://{}","crossOrigin":false}}"#,
-            self.rp_id
+            r#"{{"type":"webauthn.get","challenge":"{challenge_b64}","origin":"{origin}"{extra}}}"#
         )
         .into_bytes();
         let mut message = authenticator_data.clone();

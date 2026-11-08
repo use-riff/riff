@@ -58,7 +58,8 @@ fn reissue(
     let (proof, pre) = passkey.approve(
         &passport_address(ARTIST_ID),
         nonce(env),
-        &PasskeyAction::Register {
+        &PasskeyAction::Reissue {
+            wallet: wallet.pubkey(),
             passkey: passkey.public(),
         },
     );

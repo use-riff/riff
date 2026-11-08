@@ -42,6 +42,26 @@ pub struct Coin {
     pub launcher_fees_total: u64,
     pub bump: u8,
     pub escrow_bump: u8,
+    /// Of the partner share, the part for the launcher (in bps), fixed when
+    /// the coin was created so a config change can't cut it later. `None`
+    /// only for devnet coins from before this field (they read the zero
+    /// padding after the strings): they use the config's share.
+    pub launcher_share_bps: Option<u16>,
+}
+
+impl Coin {
+    pub fn launcher_share_bps(&self, config: &Config) -> u16 {
+        self.launcher_share_bps.unwrap_or(config.launcher_share_bps)
+    }
+}
+
+/// A proposed new admin, waiting for that key to accept. A separate account,
+/// so the config's layout stays as deployed.
+#[account]
+#[derive(InitSpace)]
+pub struct PendingAdmin {
+    pub new_admin: Pubkey,
+    pub bump: u8,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -55,11 +75,12 @@ pub struct ConfigParams {
     pub claim_window_secs: i64,
 }
 
-/// Everything but the Meteora config, which every existing coin depends on.
-/// A new claim window applies to coins created after the change.
+/// Everything but the Meteora config, which every existing coin depends on,
+/// and the admin, which changes with `propose_admin` and `accept_admin`.
+/// A new claim window and launcher share apply to coins created after the
+/// change.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ConfigUpdate {
-    pub admin: Pubkey,
     pub verifier: Pubkey,
     pub charity: Pubkey,
     pub treasury: Pubkey,

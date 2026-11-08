@@ -260,6 +260,18 @@ fn assert_close(actual: u64, expected: u64, what: &str) {
 // ------------------------------------------------------------ setup
 
 fn setup() -> Env {
+    let (env, res) = try_setup(None, |_| {});
+    ok(res);
+    env
+}
+
+/// Deploys everything and creates riff's Meteora config (with `fee_claimer`
+/// instead of riff's fee authority, and `edit` applied to its parameters),
+/// then tries to initialize riff-dbc with it.
+fn try_setup(
+    fee_claimer: Option<Pubkey>,
+    edit: impl Fn(&mut dbc::types::ConfigParameters),
+) -> (Env, TransactionResult) {
     let mut svm = LiteSVM::new();
     svm.add_program(
         riff_dbc::ID,
@@ -303,15 +315,16 @@ fn setup() -> Env {
     // riff's Meteora config, with riff's program as fee claimer. The
     // parameters come from config/gen-config.mjs (Meteora's SDK).
     let dbc_config = Keypair::new();
-    let params = dbc::types::ConfigParameters::deserialize(
+    let mut params = dbc::types::ConfigParameters::deserialize(
         &mut &include_bytes!("fixtures/config_parameters.bin")[..],
     )
     .unwrap();
+    edit(&mut params);
     let create_config = Instruction {
         program_id: dbc::ID,
         accounts: dbc::client::accounts::CreateConfig {
             config: dbc_config.pubkey(),
-            fee_claimer: fee_authority,
+            fee_claimer: fee_claimer.unwrap_or(fee_authority),
             leftover_receiver: treasury.pubkey(),
             quote_mint: WSOL,
             payer: admin.pubkey(),
@@ -335,6 +348,7 @@ fn setup() -> Env {
             fee_authority,
             fees_vault: pda(&[riff_dbc::FEES_VAULT_SEED]),
             quote_mint: WSOL,
+            dbc_config: dbc_config.pubkey(),
             program: riff_dbc::ID,
             program_data,
             token_program: TOKEN_PROGRAM_ID,
@@ -354,15 +368,16 @@ fn setup() -> Env {
         }
         .data(),
     };
-    ok(send(&mut svm, &[initialize], &[&admin]));
-    Env {
+    let res = send(&mut svm, &[initialize], &[&admin]);
+    let env = Env {
         svm,
         admin,
         treasury,
         charity,
         verifier,
         dbc_config: dbc_config.pubkey(),
-    }
+    };
+    (env, res)
 }
 
 /// An Artist Passport as riff-passport writes it (that program's own tests
@@ -582,6 +597,21 @@ fn collect_fees_ix(
     coin: &CoinKeys,
     launcher_account: Pubkey,
     treasury_account: Pubkey,
+) -> Instruction {
+    collect_fees_ix_with(
+        dbc_config,
+        coin,
+        Some(launcher_account),
+        Some(treasury_account),
+    )
+}
+
+/// `collect_fees`, with or without each of the partner side's accounts.
+fn collect_fees_ix_with(
+    dbc_config: Pubkey,
+    coin: &CoinKeys,
+    launcher_account: Option<Pubkey>,
+    treasury_account: Option<Pubkey>,
 ) -> Instruction {
     Instruction {
         program_id: riff_dbc::ID,
@@ -890,6 +920,17 @@ fn collect_lp_fees_ix(
     launcher_account: Pubkey,
     treasury_account: Pubkey,
 ) -> Instruction {
+    collect_lp_fees_ix_with(coin, g, Some((launcher_account, treasury_account)), true)
+}
+
+/// `collect_lp_fees`, with or without the partner side's receivers and its
+/// position accounts.
+fn collect_lp_fees_ix_with(
+    coin: &CoinKeys,
+    g: &Graduated,
+    receivers: Option<(Pubkey, Pubkey)>,
+    partner_position: bool,
+) -> Instruction {
     Instruction {
         program_id: riff_dbc::ID,
         accounts: riff_dbc::accounts::CollectLpFees {
@@ -900,14 +941,14 @@ fn collect_lp_fees_ix(
             fees_vault: pda(&[riff_dbc::FEES_VAULT_SEED]),
             artist_vault: artist_vault(&coin.mint),
             escrow_base_account: ata(&escrow(&coin.mint), &coin.mint, &TOKEN_2022_ID),
-            launcher_quote_account: launcher_account,
-            treasury_quote_account: treasury_account,
+            launcher_quote_account: receivers.map(|r| r.0),
+            treasury_quote_account: receivers.map(|r| r.1),
             damm_pool_authority: DAMM_POOL_AUTHORITY,
             damm_pool: g.pool,
             creator_position: g.creator_position,
             creator_position_nft_account: g.creator_nft_account,
-            partner_position: g.partner_position,
-            partner_position_nft_account: g.partner_nft_account,
+            partner_position: partner_position.then_some(g.partner_position),
+            partner_position_nft_account: partner_position.then_some(g.partner_nft_account),
             token_a_vault: damm_pda(&[b"token_vault", coin.mint.as_ref(), g.pool.as_ref()]),
             token_b_vault: damm_pda(&[b"token_vault", WSOL.as_ref(), g.pool.as_ref()]),
             base_mint: coin.mint,
@@ -1254,7 +1295,6 @@ fn only_the_admin_updates_the_config() {
         .to_account_metas(None),
         data: riff_dbc::instruction::UpdateConfig {
             params: riff_dbc::ConfigUpdate {
-                admin: *admin,
                 verifier: Pubkey::new_unique(),
                 charity: Pubkey::new_unique(),
                 treasury: Pubkey::new_unique(),
@@ -1596,14 +1636,14 @@ fn another_coins_damm_accounts_cant_be_used_to_collect_lp_fees() {
             fees_vault: pda(&[riff_dbc::FEES_VAULT_SEED]),
             artist_vault: artist_vault(&coin.mint),
             escrow_base_account: ata(&escrow(&coin.mint), &coin.mint, &TOKEN_2022_ID),
-            launcher_quote_account: launcher_account,
-            treasury_quote_account: treasury_account,
+            launcher_quote_account: Some(launcher_account),
+            treasury_quote_account: Some(treasury_account),
             damm_pool_authority: DAMM_POOL_AUTHORITY,
             damm_pool: g.pool,
             creator_position: g.creator_position,
             creator_position_nft_account: g.creator_nft_account,
-            partner_position: g.partner_position,
-            partner_position_nft_account: g.partner_nft_account,
+            partner_position: Some(g.partner_position),
+            partner_position_nft_account: Some(g.partner_nft_account),
             token_a_vault: damm_pda(&[b"token_vault", coin.mint.as_ref(), g.pool.as_ref()]),
             token_b_vault: damm_pda(&[b"token_vault", WSOL.as_ref(), g.pool.as_ref()]),
             base_mint: coin.mint,
@@ -1627,16 +1667,16 @@ fn another_coins_damm_accounts_cant_be_used_to_collect_lp_fees() {
         a.damm_pool = o.pool;
         a.creator_position = o.creator_position;
         a.creator_position_nft_account = o.creator_nft_account;
-        a.partner_position = o.partner_position;
-        a.partner_position_nft_account = o.partner_nft_account;
+        a.partner_position = Some(o.partner_position);
+        a.partner_position_nft_account = Some(o.partner_nft_account);
         a.token_a_vault = damm_pda(&[b"token_vault", other.mint.as_ref(), o.pool.as_ref()]);
         a.token_b_vault = damm_pda(&[b"token_vault", WSOL.as_ref(), o.pool.as_ref()]);
     };
     attempt(&other_pool).expect_err("another coin's pool");
     // Only its partner position, or only its creator position.
     attempt(&|a| {
-        a.partner_position = o.partner_position;
-        a.partner_position_nft_account = o.partner_nft_account;
+        a.partner_position = Some(o.partner_position);
+        a.partner_position_nft_account = Some(o.partner_nft_account);
     })
     .expect_err("another coin's partner position");
     attempt(&|a| {
@@ -1648,8 +1688,8 @@ fn another_coins_damm_accounts_cant_be_used_to_collect_lp_fees() {
     attempt(&|a| {
         a.creator_position = g.partner_position;
         a.creator_position_nft_account = g.partner_nft_account;
-        a.partner_position = g.creator_position;
-        a.partner_position_nft_account = g.creator_nft_account;
+        a.partner_position = Some(g.creator_position);
+        a.partner_position_nft_account = Some(g.creator_nft_account);
     })
     .expect_err("swapped positions");
     // The right accounts are fine, and the other coin's fees are still there.
@@ -1927,4 +1967,294 @@ fn launching_pays_the_fee_to_the_treasury_and_only_there() {
         &[&launcher, &mint],
     );
     assert!(res.is_err());
+}
+
+// ------------------------------------------------------------ review fixes
+
+#[test]
+fn initialize_refuses_a_meteora_config_riff_cant_route() {
+    // Fees claimed by someone else, fees in the coin itself, or metadata
+    // the creator could change: riff-dbc won't adopt the config (which could
+    // never change afterwards).
+    let (_, res) = try_setup(Some(Pubkey::new_unique()), |_| {});
+    fails_with(res, "InvalidDbcConfig");
+    let (_, res) = try_setup(None, |p| p.collect_fee_mode = 1);
+    fails_with(res, "InvalidDbcConfig");
+    let (_, res) = try_setup(None, |p| p.token_update_authority = 0);
+    fails_with(res, "InvalidDbcConfig");
+    let (_, res) = try_setup(None, |p| p.migrated_pool_fee.collect_fee_mode = 1);
+    fails_with(res, "InvalidDbcConfig");
+}
+
+#[test]
+fn a_launcher_cant_hold_up_the_artists_share() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    buy_on_meteora(&mut env, &coin, 10 * SOL);
+    let admin = env.admin.insecure_clone();
+    let held = artist_vault(&coin.mint);
+    let fees_vault = pda(&[riff_dbc::FEES_VAULT_SEED]);
+
+    // The launcher has no WSOL account (closed, say). The artist's share is
+    // still collected; the partner share waits with Meteora.
+    ok(send(
+        &mut env.svm,
+        &[collect_fees_ix_with(env.dbc_config, &coin, None, None)],
+        &[&admin],
+    ));
+    assert_close(
+        token_balance(&env.svm, &held),
+        10 * SOL * 80 / 10_000,
+        "artist share held",
+    );
+    assert_eq!(token_balance(&env.svm, &fees_vault), 0);
+    assert_eq!(coin_record(&env.svm, &coin.mint).launcher_fees_total, 0);
+
+    // Half the partner side's accounts is refused, either way round.
+    let (launcher_account, treasury_account) = partner_accounts(&mut env, &coin);
+    for (l, t) in [
+        (Some(launcher_account), None),
+        (None, Some(treasury_account)),
+    ] {
+        fails_with(
+            send(
+                &mut env.svm,
+                &[collect_fees_ix_with(env.dbc_config, &coin, l, t)],
+                &[&admin],
+            ),
+            "PartnerAccountsIncomplete",
+        );
+    }
+
+    // Once the account exists, the waiting partner share is split as usual.
+    collect(&mut env, &coin);
+    assert_close(
+        token_balance(&env.svm, &launcher_account),
+        10 * SOL * 30 / 10_000,
+        "launcher share",
+    );
+    assert_close(
+        token_balance(&env.svm, &treasury_account),
+        10 * SOL * 50 / 10_000,
+        "riff share",
+    );
+
+    // The same after graduation, for the LP fees.
+    let g = graduate(&mut env, &coin);
+    collect(&mut env, &coin);
+    buy_on_damm(&mut env, &coin, &g, 10 * SOL);
+    let before = token_balance(&env.svm, &held);
+    ok(send(
+        &mut env.svm,
+        &[
+            compute_budget(400_000),
+            collect_lp_fees_ix_with(&coin, &g, None, false),
+        ],
+        &[&admin],
+    ));
+    let artist_lp = token_balance(&env.svm, &held) - before;
+    assert!(artist_lp > 10 * SOL / 1_000, "artist LP fees: {artist_lp}");
+    for (receivers, position) in [
+        (Some((launcher_account, treasury_account)), false),
+        (None, true),
+    ] {
+        fails_with(
+            send(
+                &mut env.svm,
+                &[
+                    compute_budget(400_000),
+                    collect_lp_fees_ix_with(&coin, &g, receivers, position),
+                ],
+                &[&admin],
+            ),
+            "PartnerAccountsIncomplete",
+        );
+    }
+    let launcher_before = token_balance(&env.svm, &launcher_account);
+    collect_lp(&mut env, &coin, &g);
+    let launcher_lp = token_balance(&env.svm, &launcher_account) - launcher_before;
+    assert_close(
+        launcher_lp,
+        artist_lp * LAUNCHER_SHARE_BPS as u64 / 10_000,
+        "the partner position's fees waited",
+    );
+}
+
+fn update_config_ix(
+    admin: &Pubkey,
+    launcher_share_bps: u16,
+    claim_window_secs: i64,
+    env: &Env,
+) -> Instruction {
+    Instruction {
+        program_id: riff_dbc::ID,
+        accounts: riff_dbc::accounts::UpdateConfig {
+            admin: *admin,
+            config: pda(&[riff_dbc::CONFIG_SEED]),
+        }
+        .to_account_metas(None),
+        data: riff_dbc::instruction::UpdateConfig {
+            params: riff_dbc::ConfigUpdate {
+                verifier: env.verifier.pubkey(),
+                charity: env.charity.pubkey(),
+                treasury: env.treasury.pubkey(),
+                launcher_share_bps,
+                max_launch_buy: MAX_LAUNCH_BUY,
+                claim_window_secs,
+            },
+        }
+        .data(),
+    }
+}
+
+#[test]
+fn a_coins_launcher_share_is_fixed_when_its_created() {
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    assert_eq!(
+        coin_record(&env.svm, &coin.mint).launcher_share_bps,
+        Some(LAUNCHER_SHARE_BPS)
+    );
+
+    // The admin cuts the launcher share to nothing: existing coins keep theirs.
+    let admin = env.admin.insecure_clone();
+    let cut = update_config_ix(&admin.pubkey(), 0, CLAIM_WINDOW_SECS, &env);
+    ok(send(&mut env.svm, &[cut], &[&admin]));
+    buy_on_meteora(&mut env, &coin, 10 * SOL);
+    let (launcher_account, _) = collect(&mut env, &coin);
+    assert_close(
+        token_balance(&env.svm, &launcher_account),
+        10 * SOL * 30 / 10_000,
+        "launcher share",
+    );
+
+    // A coin created after the change gets the new share.
+    let later = create_coin(&mut env);
+    buy_on_meteora(&mut env, &later, 10 * SOL);
+    let (later_launcher, treasury_account) = collect(&mut env, &later);
+    assert_eq!(token_balance(&env.svm, &later_launcher), 0);
+    assert!(token_balance(&env.svm, &treasury_account) > 0);
+}
+
+#[test]
+fn the_claim_window_is_bounded() {
+    let mut env = setup();
+    let admin = env.admin.insecure_clone();
+    let too_long = update_config_ix(
+        &admin.pubkey(),
+        LAUNCHER_SHARE_BPS,
+        riff_dbc::MAX_CLAIM_WINDOW_SECS + 1,
+        &env,
+    );
+    fails_with(
+        send(&mut env.svm, &[too_long], &[&admin]),
+        "InvalidClaimWindow",
+    );
+    let longest = update_config_ix(
+        &admin.pubkey(),
+        LAUNCHER_SHARE_BPS,
+        riff_dbc::MAX_CLAIM_WINDOW_SECS,
+        &env,
+    );
+    ok(send(&mut env.svm, &[longest], &[&admin]));
+}
+
+#[test]
+fn the_admin_hands_over_to_a_key_that_accepts() {
+    let mut env = setup();
+    let admin = env.admin.insecure_clone();
+    let next = funded(&mut env.svm);
+    let stranger = funded(&mut env.svm);
+    let pending = pda(&[riff_dbc::PENDING_ADMIN_SEED]);
+    let propose = |admin: &Pubkey, new_admin: Pubkey| Instruction {
+        program_id: riff_dbc::ID,
+        accounts: riff_dbc::accounts::ProposeAdmin {
+            admin: *admin,
+            config: pda(&[riff_dbc::CONFIG_SEED]),
+            pending_admin: pending,
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+        data: riff_dbc::instruction::ProposeAdmin { new_admin }.data(),
+    };
+    let accept = |new_admin: &Pubkey| Instruction {
+        program_id: riff_dbc::ID,
+        accounts: riff_dbc::accounts::AcceptAdmin {
+            new_admin: *new_admin,
+            config: pda(&[riff_dbc::CONFIG_SEED]),
+            pending_admin: pending,
+        }
+        .to_account_metas(None),
+        data: riff_dbc::instruction::AcceptAdmin {}.data(),
+    };
+
+    fails_with(
+        send(
+            &mut env.svm,
+            &[propose(&stranger.pubkey(), stranger.pubkey())],
+            &[&stranger],
+        ),
+        "ConstraintAddress",
+    );
+    // A typo'd proposal changes nothing until accepted, and can be replaced.
+    ok(send(
+        &mut env.svm,
+        &[propose(&admin.pubkey(), stranger.pubkey())],
+        &[&admin],
+    ));
+    ok(send(
+        &mut env.svm,
+        &[propose(&admin.pubkey(), next.pubkey())],
+        &[&admin],
+    ));
+    fails_with(
+        send(&mut env.svm, &[accept(&stranger.pubkey())], &[&stranger]),
+        "NotProposedAdmin",
+    );
+    ok(send(&mut env.svm, &[accept(&next.pubkey())], &[&next]));
+
+    let config: riff_dbc::Config = anchor_lang::AccountDeserialize::try_deserialize(
+        &mut &env
+            .svm
+            .get_account(&pda(&[riff_dbc::CONFIG_SEED]))
+            .unwrap()
+            .data[..],
+    )
+    .unwrap();
+    assert_eq!(config.admin, next.pubkey());
+    let old = update_config_ix(&admin.pubkey(), LAUNCHER_SHARE_BPS, CLAIM_WINDOW_SECS, &env);
+    fails_with(send(&mut env.svm, &[old], &[&admin]), "ConstraintAddress");
+    let new = update_config_ix(&next.pubkey(), LAUNCHER_SHARE_BPS, CLAIM_WINDOW_SECS, &env);
+    ok(send(&mut env.svm, &[new], &[&next]));
+}
+
+#[test]
+fn coins_from_before_the_fixed_share_use_the_configs() {
+    // A devnet coin created before `launcher_share_bps` existed reads `None`
+    // there (the zero padding after its strings).
+    let mut env = setup();
+    let coin = create_coin(&mut env);
+    let address = coin_pda(&coin.mint);
+    let mut account = env.svm.get_account(&address).unwrap();
+    let mut record = coin_record(&env.svm, &coin.mint);
+    record.launcher_share_bps = None;
+    let mut data = Vec::new();
+    anchor_lang::AccountSerialize::try_serialize(&record, &mut data).unwrap();
+    // Exactly what the old layout left: its fields, then zeros.
+    assert_eq!(data.last(), Some(&0));
+    account.data.fill(0);
+    account.data[..data.len() - 1].copy_from_slice(&data[..data.len() - 1]);
+    env.svm.set_account(address, account).unwrap();
+    assert_eq!(coin_record(&env.svm, &coin.mint).launcher_share_bps, None);
+
+    let admin = env.admin.insecure_clone();
+    let half = update_config_ix(&admin.pubkey(), 5_000, CLAIM_WINDOW_SECS, &env);
+    ok(send(&mut env.svm, &[half], &[&admin]));
+    buy_on_meteora(&mut env, &coin, 10 * SOL);
+    let (launcher_account, _) = collect(&mut env, &coin);
+    assert_close(
+        token_balance(&env.svm, &launcher_account),
+        10 * SOL * 40 / 10_000,
+        "config's share",
+    );
 }

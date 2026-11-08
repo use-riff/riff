@@ -3,7 +3,10 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::*,
     error::PassportError,
-    events::{EndorsementChanged, PasskeyChanged, PassportIssued, ProofsAdded, WalletChanged},
+    events::{
+        EndorsementChanged, PasskeyChanged, PassportIssued, ProofsAdded, RecoveryVetoed,
+        WalletChanged,
+    },
     instructions::shared::{fresh_proofs, kinds, spotify_id},
     passkey::{self, PasskeyAction, PasskeyProof},
     state::{
@@ -143,6 +146,20 @@ pub fn require_passkey(
     Ok(())
 }
 
+/// The holder just acted with the wallet and passkey, the authority a veto
+/// needs, so a pending recovery ends. Otherwise an artist who answers a
+/// hostile recovery by changing their wallet or passkey would still lose the
+/// passport when it finalizes.
+fn cancel_recovery(passport: &mut Account<Passport>) {
+    if passport.recovery.take().is_some() {
+        emit!(RecoveryVetoed {
+            passport: passport.key(),
+            by_passkey: true,
+            by_proof: None
+        });
+    }
+}
+
 /// Adds fresh proofs to the passport. Needs the passkey: every proof becomes
 /// a guardian that can veto a recovery.
 pub fn handle_add_proofs<'info>(
@@ -172,6 +189,7 @@ pub fn handle_add_proofs<'info>(
     for (_, record) in &records {
         passport.upsert_proof(ProofSummary::from(record))?;
     }
+    cancel_recovery(passport);
     emit!(ProofsAdded {
         passport: passport.key(),
         proofs: kinds(&records)
@@ -200,6 +218,7 @@ pub fn handle_set_wallet(ctx: Context<SetWallet>, passkey_proof: PasskeyProof) -
     let old_wallet = act.passport.wallet;
     act.passport.wallet = new_wallet;
     act.passport.wallet_since = Clock::get()?.unix_timestamp;
+    cancel_recovery(&mut act.passport);
     emit!(WalletChanged {
         passport: act.passport.key(),
         old_wallet,
@@ -208,7 +227,8 @@ pub fn handle_set_wallet(ctx: Context<SetWallet>, passkey_proof: PasskeyProof) -
     Ok(())
 }
 
-/// Replaces the passkey: the old one approves, the new one proves it's held.
+/// Replaces the passkey: the old one approves, and the new one signs the same
+/// action to prove it's held.
 pub fn handle_set_passkey(
     ctx: Context<PasskeyAct>,
     new_passkey: Passkey,
@@ -217,22 +237,15 @@ pub fn handle_set_passkey(
 ) -> Result<()> {
     let passport = &mut ctx.accounts.passport;
     let config = &ctx.accounts.config;
-    let nonce = passport.nonce;
-    let register = passkey::challenge(
-        &passport.key(),
-        nonce,
-        &PasskeyAction::Register {
-            passkey: new_passkey,
-        },
-    )?;
+    let action = PasskeyAction::SetPasskey { new_passkey };
+    let expected = passkey::challenge(&passport.key(), passport.nonce, &action)?;
     passkey::verify(
         &ctx.accounts.instructions,
         &new_passkey,
         &config.rp_id_hash,
-        &register,
+        &expected,
         &new_proof,
     )?;
-    let action = PasskeyAction::SetPasskey { new_passkey };
     require_passkey(
         passport,
         config,
@@ -241,6 +254,7 @@ pub fn handle_set_passkey(
         &old_proof,
     )?;
     passport.passkey = new_passkey;
+    cancel_recovery(passport);
     emit!(PasskeyChanged {
         passport: passport.key()
     });

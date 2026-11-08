@@ -102,7 +102,8 @@ fn request_with_records(
     let (proof, pre) = new_passkey.approve(
         &passport,
         nonce(env),
-        &PasskeyAction::Register {
+        &PasskeyAction::Recover {
+            new_wallet: new_wallet.pubkey(),
             passkey: new_passkey.public(),
         },
     );
@@ -388,4 +389,253 @@ fn a_revoked_passport_can_do_nothing() {
         ),
         E::Revoked,
     );
+}
+
+fn set_wallet(env: &mut Env, wallet: &Keypair, passkey: &TestPasskey, new_wallet: &Keypair) {
+    let passport = passport_address(ARTIST_ID);
+    let (proof, pre) = passkey.approve(
+        &passport,
+        nonce(env),
+        &PasskeyAction::SetWallet {
+            new_wallet: new_wallet.pubkey(),
+        },
+    );
+    let ix = ix(
+        riff_passport::instruction::SetWallet {
+            passkey_proof: proof,
+        },
+        riff_passport::accounts::SetWallet {
+            act: act_accounts(&wallet.pubkey()),
+            new_wallet: new_wallet.pubkey(),
+        },
+    );
+    send_many(env.svm(), &[pre, ix], &[wallet, new_wallet]).unwrap();
+}
+
+fn pending(env: &Env) -> Option<riff_passport::Recovery> {
+    fetch::<riff_passport::Passport>(&env.svm, &passport_address(ARTIST_ID)).recovery
+}
+
+#[test]
+fn changing_the_wallet_or_passkey_ends_a_pending_recovery() {
+    let mut env = setup();
+    let (wallet, passkey) = issued(&mut env);
+    let passport = passport_address(ARTIST_ID);
+
+    // An attacker with the artist's inbox asks for the passport. The artist
+    // answers by moving to a new wallet instead of vetoing: that's enough.
+    let attacker = funded_keypair(env.svm());
+    request_recovery(&mut env, &attacker, &TestPasskey::new(), &DEFAULT_KINDS).unwrap();
+    let fresh_wallet = funded_keypair(env.svm());
+    set_wallet(&mut env, &wallet, &passkey, &fresh_wallet);
+    assert!(pending(&env).is_none());
+    advance_time(env.svm(), RECOVERY_DELAY);
+    let anyone = funded_keypair(env.svm());
+    assert_error(send(env.svm(), finalize_ix(), &[&anyone]), E::NoRecovery);
+
+    // A new passkey ends one too.
+    let attacker = funded_keypair(env.svm());
+    request_recovery(&mut env, &attacker, &TestPasskey::new(), &DEFAULT_KINDS).unwrap();
+    let next = TestPasskey::new();
+    let n = nonce(&env);
+    let action = PasskeyAction::SetPasskey {
+        new_passkey: next.public(),
+    };
+    let (old_proof, pre_old) = passkey.approve(&passport, n, &action);
+    let (new_proof, pre_new) = next.approve(&passport, n, &action);
+    let set_passkey = ix(
+        riff_passport::instruction::SetPasskey {
+            new_passkey: next.public(),
+            old_proof,
+            new_proof,
+        },
+        act_accounts(&fresh_wallet.pubkey()),
+    );
+    send_many(
+        env.svm(),
+        &[pre_old, pre_new, set_passkey],
+        &[&fresh_wallet],
+    )
+    .unwrap();
+    assert!(pending(&env).is_none());
+    let p: riff_passport::Passport = fetch(&env.svm, &passport);
+    assert_eq!(p.wallet, fresh_wallet.pubkey());
+    assert_eq!(p.passkey, next.public());
+}
+
+#[test]
+fn a_guardian_takes_over_a_pending_recovery_but_a_stranger_cant() {
+    let mut env = setup();
+    issued(&mut env);
+
+    // The artist lost both the wallet and the passkey. An attacker with
+    // their inbox (two email sources, no guardian) asks first.
+    let attacker = funded_keypair(env.svm());
+    let emails = [ProofKind::SpotifyEmail, ProofKind::Distributor];
+    request_recovery(&mut env, &attacker, &TestPasskey::new(), &emails).unwrap();
+
+    // The artist proves again from a new wallet, including their YouTube
+    // channel (a guardian), and replaces the attacker's request.
+    let artist = funded_keypair(env.svm());
+    let artist_passkey = TestPasskey::new();
+    request_recovery_ix_for(&mut env, &artist, &artist_passkey, &DEFAULT_KINDS, true).unwrap();
+    assert_eq!(pending(&env).unwrap().new_wallet, artist.pubkey());
+
+    // The attacker has no guardian, so they can't take it back, nor veto.
+    let attacker2 = funded_keypair(env.svm());
+    assert_error(
+        request_recovery_ix_for(&mut env, &attacker2, &TestPasskey::new(), &emails, true),
+        E::NotAGuardian,
+    );
+
+    // The time-lock restarted with the artist's request; then it's theirs.
+    advance_time(env.svm(), RECOVERY_DELAY);
+    let anyone = funded_keypair(env.svm());
+    send(env.svm(), finalize_ix(), &[&anyone]).unwrap();
+    let p: riff_passport::Passport = fetch(&env.svm, &passport_address(ARTIST_ID));
+    assert_eq!(p.wallet, artist.pubkey());
+    assert_eq!(p.passkey, artist_passkey.public());
+}
+
+#[test]
+fn contesting_needs_a_pending_recovery() {
+    let mut env = setup();
+    issued(&mut env);
+    let artist = funded_keypair(env.svm());
+    assert_error(
+        request_recovery_ix_for(&mut env, &artist, &TestPasskey::new(), &DEFAULT_KINDS, true),
+        E::NoRecovery,
+    );
+}
+
+#[test]
+fn a_pending_recovery_stops_wallet_only_withdrawals() {
+    let mut env = setup();
+    let (wallet, passkey) = issued(&mut env);
+    let passport = passport_address(ARTIST_ID);
+    env.svm()
+        .airdrop(&vault_address(&passport), 5 * SOL)
+        .unwrap();
+    let thief_target = funded_keypair(env.svm());
+    request_recovery(&mut env, &thief_target, &TestPasskey::new(), &DEFAULT_KINDS).unwrap();
+
+    // Within the daily amount, but the wallet may be why there's a recovery.
+    assert_error(
+        send(
+            env.svm(),
+            withdraw_ix(&wallet.pubkey(), 1, None),
+            &[&wallet],
+        ),
+        E::PasskeyRequired,
+    );
+    // With the passkey it still works.
+    let (proof, pre) = passkey.approve(
+        &passport,
+        nonce(&env),
+        &PasskeyAction::Withdraw {
+            to: wallet.pubkey(),
+            amount: 1,
+        },
+    );
+    send_many(
+        env.svm(),
+        &[pre, withdraw_ix(&wallet.pubkey(), 1, Some(proof))],
+        &[&wallet],
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_registration_signature_cant_start_a_recovery() {
+    let mut env = setup();
+    issued(&mut env);
+    let new_wallet = funded_keypair(env.svm());
+    for kind in DEFAULT_KINDS {
+        record_proof(&mut env, &new_wallet, kind).unwrap();
+    }
+    let new_passkey = TestPasskey::new();
+    let passport = passport_address(ARTIST_ID);
+    let (proof, pre) = new_passkey.approve(
+        &passport,
+        nonce(&env),
+        &PasskeyAction::Register {
+            passkey: new_passkey.public(),
+        },
+    );
+    let mut request = ix(
+        riff_passport::instruction::RequestRecovery {
+            new_passkey: new_passkey.public(),
+            passkey_proof: proof,
+        },
+        riff_passport::accounts::RequestRecovery {
+            new_wallet: new_wallet.pubkey(),
+            config: config_address(),
+            passport,
+            instructions: instructions_sysvar(),
+        },
+    );
+    for kind in DEFAULT_KINDS {
+        request.accounts.push(AccountMeta::new_readonly(
+            proof_address(ARTIST_ID, &new_wallet.pubkey(), kind),
+            false,
+        ));
+    }
+    assert_error(
+        send_many(env.svm(), &[pre, request], &[&new_wallet]),
+        E::PasskeyWrongChallenge,
+    );
+}
+
+/// Records `kinds` for `new_wallet`, then requests (or, with `contest`,
+/// contests) a recovery with them.
+#[allow(clippy::result_large_err)]
+fn request_recovery_ix_for(
+    env: &mut Env,
+    new_wallet: &Keypair,
+    new_passkey: &TestPasskey,
+    kinds: &[ProofKind],
+    contest: bool,
+) -> litesvm::types::TransactionResult {
+    for kind in kinds {
+        record_proof(env, new_wallet, *kind).unwrap();
+    }
+    let passport = passport_address(ARTIST_ID);
+    let (proof, pre) = new_passkey.approve(
+        &passport,
+        nonce(env),
+        &PasskeyAction::Recover {
+            new_wallet: new_wallet.pubkey(),
+            passkey: new_passkey.public(),
+        },
+    );
+    let accounts = riff_passport::accounts::RequestRecovery {
+        new_wallet: new_wallet.pubkey(),
+        config: config_address(),
+        passport,
+        instructions: instructions_sysvar(),
+    };
+    let mut request = if contest {
+        ix(
+            riff_passport::instruction::ContestRecovery {
+                new_passkey: new_passkey.public(),
+                passkey_proof: proof,
+            },
+            accounts,
+        )
+    } else {
+        ix(
+            riff_passport::instruction::RequestRecovery {
+                new_passkey: new_passkey.public(),
+                passkey_proof: proof,
+            },
+            accounts,
+        )
+    };
+    for kind in kinds {
+        request.accounts.push(AccountMeta::new_readonly(
+            proof_address(ARTIST_ID, &new_wallet.pubkey(), *kind),
+            false,
+        ));
+    }
+    send_many(env.svm(), &[pre, request], &[new_wallet])
 }

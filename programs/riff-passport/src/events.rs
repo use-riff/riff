@@ -47,6 +47,8 @@ pub struct RecoveryRequested {
     pub passport: Pubkey,
     pub new_wallet: Pubkey,
     pub effective_at: i64,
+    /// The proofs the request was made with, for whoever watches recoveries.
+    pub proofs: Vec<ProofKind>,
 }
 
 #[event]

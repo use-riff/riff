@@ -14,6 +14,72 @@ export type RiffDbc = {
   },
   "instructions": [
     {
+      "name": "acceptAdmin",
+      "discriminator": [
+        112,
+        42,
+        45,
+        90,
+        116,
+        181,
+        13,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "newAdmin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingAdmin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  100,
+                  109,
+                  105,
+                  110
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claimArtist",
       "discriminator": [
         18,
@@ -521,11 +587,13 @@ export type RiffDbc = {
         },
         {
           "name": "launcherQuoteAccount",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "treasuryQuoteAccount",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "dbcConfig"
@@ -730,11 +798,13 @@ export type RiffDbc = {
         },
         {
           "name": "launcherQuoteAccount",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "treasuryQuoteAccount",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
           "name": "dammPoolAuthority"
@@ -752,10 +822,12 @@ export type RiffDbc = {
         },
         {
           "name": "partnerPosition",
-          "writable": true
+          "writable": true,
+          "optional": true
         },
         {
-          "name": "partnerPositionNftAccount"
+          "name": "partnerPositionNftAccount",
+          "optional": true
         },
         {
           "name": "tokenAVault",
@@ -1075,6 +1147,12 @@ export type RiffDbc = {
           "address": "So11111111111111111111111111111111111111112"
         },
         {
+          "name": "dbcConfig",
+          "docs": [
+            "checked in the handler (see `check_dbc_config`)."
+          ]
+        },
+        {
           "name": "program",
           "address": "gATYd3vfHCPCrhFupj8HxVX78syyXNfPSbYRsttm9RF"
         },
@@ -1237,6 +1315,83 @@ export type RiffDbc = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "proposeAdmin",
+      "docs": [
+        "The admin proposes a new admin, who must accept."
+      ],
+      "discriminator": [
+        121,
+        214,
+        199,
+        212,
+        87,
+        39,
+        117,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "pendingAdmin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  97,
+                  100,
+                  109,
+                  105,
+                  110
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "newAdmin",
+          "type": "pubkey"
+        }
+      ]
     },
     {
       "name": "sweepCharity",
@@ -1464,6 +1619,19 @@ export type RiffDbc = {
         204,
         130
       ]
+    },
+    {
+      "name": "pendingAdmin",
+      "discriminator": [
+        220,
+        45,
+        135,
+        16,
+        196,
+        153,
+        181,
+        56
+      ]
     }
   ],
   "events": [
@@ -1618,6 +1786,21 @@ export type RiffDbc = {
       "code": 6016,
       "name": "lateClaimNeedsLpAccounts",
       "msg": "A late claim on a graduated coin must collect its LP fees: pass the DAMM v2 accounts"
+    },
+    {
+      "code": 6017,
+      "name": "invalidDbcConfig",
+      "msg": "The Meteora config doesn't have the settings riff relies on"
+    },
+    {
+      "code": 6018,
+      "name": "partnerAccountsIncomplete",
+      "msg": "Pass all of the partner side's accounts, or none of them"
+    },
+    {
+      "code": 6019,
+      "name": "notProposedAdmin",
+      "msg": "That key isn't the proposed admin"
     }
   ],
   "types": [
@@ -1753,6 +1936,18 @@ export type RiffDbc = {
           {
             "name": "escrowBump",
             "type": "u8"
+          },
+          {
+            "name": "launcherShareBps",
+            "docs": [
+              "Of the partner share, the part for the launcher (in bps), fixed when",
+              "the coin was created so a config change can't cut it later. `None`",
+              "only for devnet coins from before this field (they read the zero",
+              "padding after the strings): they use the config's share."
+            ],
+            "type": {
+              "option": "u16"
+            }
           }
         ]
       }
@@ -1890,16 +2085,14 @@ export type RiffDbc = {
     {
       "name": "configUpdate",
       "docs": [
-        "Everything but the Meteora config, which every existing coin depends on.",
-        "A new claim window applies to coins created after the change."
+        "Everything but the Meteora config, which every existing coin depends on,",
+        "and the admin, which changes with `propose_admin` and `accept_admin`.",
+        "A new claim window and launcher share apply to coins created after the",
+        "change."
       ],
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "admin",
-            "type": "pubkey"
-          },
           {
             "name": "verifier",
             "type": "pubkey"
@@ -2069,6 +2262,26 @@ export type RiffDbc = {
           },
           {
             "name": "vaultBump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "pendingAdmin",
+      "docs": [
+        "A proposed new admin, waiting for that key to accept. A separate account,",
+        "so the config's layout stays as deployed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "newAdmin",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
             "type": "u8"
           }
         ]

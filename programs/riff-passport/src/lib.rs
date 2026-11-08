@@ -37,6 +37,15 @@ pub mod riff_passport {
         admin::handle_update_config(ctx, params)
     }
 
+    /// The admin proposes a new admin, who must accept.
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        admin::handle_propose_admin(ctx, new_admin)
+    }
+
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        admin::handle_accept_admin(ctx)
+    }
+
     pub fn revoke_passport(ctx: Context<RevokePassport>, reason: String) -> Result<()> {
         admin::handle_revoke_passport(ctx, reason)
     }
@@ -112,6 +121,15 @@ pub mod riff_passport {
         passkey_proof: PasskeyProof,
     ) -> Result<()> {
         recovery::handle_request_recovery(ctx, new_passkey, passkey_proof)
+    }
+
+    /// A guardian replaces a pending recovery with its own.
+    pub fn contest_recovery<'info>(
+        ctx: Context<'info, RequestRecovery<'info>>,
+        new_passkey: Passkey,
+        passkey_proof: PasskeyProof,
+    ) -> Result<()> {
+        recovery::handle_contest_recovery(ctx, new_passkey, passkey_proof)
     }
 
     pub fn veto_recovery<'info>(

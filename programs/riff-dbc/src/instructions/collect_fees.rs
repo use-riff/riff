@@ -14,6 +14,10 @@ use crate::{
 /// - The partner share is split between the coin's launcher and riff.
 /// - The creator share goes to the coin's artist vault, where it waits for
 ///   the artist (`pay_artist`) or for charity (`sweep_charity`).
+///
+/// The launcher's and treasury's accounts are optional, together: without
+/// them the partner share stays with Meteora for a later call, so a launcher
+/// who closes their WSOL account can't hold up the artist's share.
 #[derive(Accounts)]
 pub struct CollectFees<'info> {
     #[account(seeds = [CONFIG_SEED], bump = config.bump)]
@@ -34,9 +38,9 @@ pub struct CollectFees<'info> {
     #[account(mut, address = shared::escrow_base_address(&escrow.key(), &base_mint.key()))]
     pub escrow_base_account: UncheckedAccount<'info>,
     #[account(mut, token::mint = quote_mint, constraint = launcher_quote_account.owner == coin.launcher @ RiffDbcError::WrongReceiver)]
-    pub launcher_quote_account: Box<Account<'info, TokenAccount>>,
+    pub launcher_quote_account: Option<Box<Account<'info, TokenAccount>>>,
     #[account(mut, token::mint = quote_mint, constraint = treasury_quote_account.owner == config.treasury @ RiffDbcError::WrongReceiver)]
-    pub treasury_quote_account: Box<Account<'info, TokenAccount>>,
+    pub treasury_quote_account: Option<Box<Account<'info, TokenAccount>>>,
     /// CHECK: riff's DBC config.
     #[account(address = config.dbc_config)]
     pub dbc_config: UncheckedAccount<'info>,
@@ -68,44 +72,51 @@ pub fn handle_collect_fees<'info>(ctx: Context<'info, CollectFees<'info>>) -> Re
     let fee_signer: &[&[u8]] = &[FEE_AUTHORITY_SEED, &fee_authority_bump];
 
     // Partner share: this pool's only, so it can be credited to this coin.
-    let before = a.fees_vault.amount;
-    dynamic_bonding_curve::cpi::claim_trading_fee(
-        CpiContext::new_with_signer(
-            a.dbc_program.key(),
-            dynamic_bonding_curve::cpi::accounts::ClaimTradingFee {
-                pool_authority: a.pool_authority.to_account_info(),
-                config: a.dbc_config.to_account_info(),
-                pool: a.pool.to_account_info(),
-                token_a_account: a.escrow_base_account.to_account_info(),
-                token_b_account: a.fees_vault.to_account_info(),
-                base_vault: a.base_vault.to_account_info(),
-                quote_vault: a.quote_vault.to_account_info(),
-                base_mint: a.base_mint.to_account_info(),
-                quote_mint: a.quote_mint.to_account_info(),
-                fee_claimer: a.fee_authority.to_account_info(),
-                token_base_program: a.token_base_program.to_account_info(),
-                token_quote_program: a.token_quote_program.to_account_info(),
-                event_authority: a.dbc_event_authority.to_account_info(),
-                program: a.dbc_program.to_account_info(),
-            },
-            &[fee_signer],
-        ),
-        u64::MAX,
-        u64::MAX,
+    let receivers = shared::partner_receivers(
+        a.launcher_quote_account.as_deref(),
+        a.treasury_quote_account.as_deref(),
     )?;
-    a.fees_vault.reload()?;
-    let partner_share = a.fees_vault.amount - before;
-    let to_launcher = shared::split_partner_share(
-        &a.token_quote_program.to_account_info(),
-        &a.fees_vault,
-        &a.launcher_quote_account.to_account_info(),
-        &a.treasury_quote_account.to_account_info(),
-        &a.fee_authority.to_account_info(),
-        fee_signer,
-        a.config.launcher_share_bps,
-        partner_share,
-    )?;
-    a.coin.launcher_fees_total += to_launcher;
+    let (mut to_launcher, mut partner_share) = (0, 0);
+    if let Some((launcher_account, treasury_account)) = receivers {
+        let before = a.fees_vault.amount;
+        dynamic_bonding_curve::cpi::claim_trading_fee(
+            CpiContext::new_with_signer(
+                a.dbc_program.key(),
+                dynamic_bonding_curve::cpi::accounts::ClaimTradingFee {
+                    pool_authority: a.pool_authority.to_account_info(),
+                    config: a.dbc_config.to_account_info(),
+                    pool: a.pool.to_account_info(),
+                    token_a_account: a.escrow_base_account.to_account_info(),
+                    token_b_account: a.fees_vault.to_account_info(),
+                    base_vault: a.base_vault.to_account_info(),
+                    quote_vault: a.quote_vault.to_account_info(),
+                    base_mint: a.base_mint.to_account_info(),
+                    quote_mint: a.quote_mint.to_account_info(),
+                    fee_claimer: a.fee_authority.to_account_info(),
+                    token_base_program: a.token_base_program.to_account_info(),
+                    token_quote_program: a.token_quote_program.to_account_info(),
+                    event_authority: a.dbc_event_authority.to_account_info(),
+                    program: a.dbc_program.to_account_info(),
+                },
+                &[fee_signer],
+            ),
+            u64::MAX,
+            u64::MAX,
+        )?;
+        a.fees_vault.reload()?;
+        partner_share = a.fees_vault.amount - before;
+        to_launcher = shared::split_partner_share(
+            &a.token_quote_program.to_account_info(),
+            &a.fees_vault,
+            &launcher_account,
+            &treasury_account,
+            &a.fee_authority.to_account_info(),
+            fee_signer,
+            a.coin.launcher_share_bps(&a.config),
+            partner_share,
+        )?;
+        a.coin.launcher_fees_total += to_launcher;
+    }
 
     let mint = a.base_mint.key();
     let escrow_bump = [a.coin.escrow_bump];

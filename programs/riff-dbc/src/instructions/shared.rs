@@ -178,6 +178,19 @@ pub fn pay_artist_sol<'info>(
     Ok(amount)
 }
 
+/// The launcher's and treasury's accounts for a partner split: both, or
+/// neither (the partner share then waits with Meteora for a later call).
+pub fn partner_receivers<'info>(
+    launcher: Option<&Account<'info, TokenAccount>>,
+    treasury: Option<&Account<'info, TokenAccount>>,
+) -> Result<Option<(AccountInfo<'info>, AccountInfo<'info>)>> {
+    match (launcher, treasury) {
+        (Some(l), Some(t)) => Ok(Some((l.to_account_info(), t.to_account_info()))),
+        (None, None) => Ok(None),
+        _ => err!(crate::error::RiffDbcError::PartnerAccountsIncomplete),
+    }
+}
+
 /// Splits a partner share that just arrived in the fees vault between the
 /// coin's launcher and riff's treasury. Returns the launcher's part.
 #[allow(clippy::too_many_arguments)]

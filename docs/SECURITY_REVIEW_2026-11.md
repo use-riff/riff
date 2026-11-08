@@ -22,6 +22,40 @@ An internal review done with Claude Code at commit `fd85fd2`. **It is not a subs
 
 No finding lets an outside attacker with no keys move funds. Every High and Medium needs a privileged key (H-1, H-2), a mistake by the user (M-1), or a launcher acting in bad faith (M-2).
 
+## Status of the fixes
+
+Addressed in the follow-up commit on this branch. Each code fix has a regression test (riff-dbc 22 → 28 tests, riff-passport 25 → 33 plus 3 unit tests). Every test passes against Meteora's pinned mainnet binaries.
+
+| ID | Fix |
+|---|---|
+| H-1 | Partly code: the bounded time-lock (H-2), `contest_recovery` (L-5) and the passkey on every withdrawal during a recovery (I-8) narrow what a stolen verifier key achieves. `RecoveryRequested` now lists the proof kinds used. The rest is operational and **must be in place before mainnet**: separate keys for riff-dbc's and the passport's verifier (KMS or HSM), round-the-clock monitoring of issue, recovery and claim events against what riff's server signed, and off-chain notice to artists of a recovery (`MAINNET_LAUNCH.md`, "The verifier key"). The trust table is corrected. |
+| H-2 | `update_config` enforces `MIN_RECOVERY_DELAY` (24 h; 60 s on the devnet build), `MAX_FREE_WITHDRAW_PER_DAY` (1 SOL) and `MAX_PROOF_MAX_AGE` (30 days), and refuses a new passkey site. A two-step admin hand-over is added (`propose_admin` / `accept_admin`, using a separate PDA so the config layout is unchanged). The trust table now says what the admin can do together with the verifier. |
+| M-1 | `set_wallet`, `set_passkey` and `add_proofs` end a pending recovery (emitting `RecoveryVetoed`). As a backstop, `finalize_recovery` refuses a recovery requested before the current wallet took over (`RecoveryOutdated`). |
+| M-2 | In `collect_fees` and `collect_lp_fees`, the partner side's accounts are optional, all or none. Without them only the artist's side is collected, and the partner share waits with Meteora. |
+| L-1 | `Coin.launcher_share_bps` is fixed at creation. Devnet coins from before the field read `None` and use the config's share, as before. |
+| L-2 | Documentation: the cap isn't a security control. On-chain code can't see other transactions in a block. |
+| L-3 | `initialize` takes the Meteora config account and checks it (`check_dbc_config`): fee claimer, WSOL, fee modes before and after graduation, DAMM v2, locked liquidity, no migration fee, vesting or creation fee, Token-2022, immutable metadata. |
+| L-4 | The passkey check requires an https `origin` on the passkey site or a subdomain, and refuses `crossOrigin: true` and `topOrigin`. Done without a config change by hashing each label suffix of the host against the rpId hash. |
+| L-5 | `contest_recovery`: a request whose fresh proofs include a guardian replaces a pending recovery, and the time-lock restarts. |
+| I-1 | New per-purpose actions: `Recover { new_wallet, passkey }`, `Reissue { wallet, passkey }`, and `set_passkey`'s new key signs `SetPasskey`. `Register` is left only for `issue_passport`; existing variant indexes are unchanged. |
+| I-2 | Documented (audit package, known limit 6). It can't be prevented on chain: Meteora lets anyone use a config. |
+| I-3 | Claim window at most `MAX_CLAIM_WINDOW_SECS` (a year); the deadline uses a checked add. |
+| I-4 | Documented in the passport README's limits; the remedy is reissue. |
+| I-5 | Reader rule documented: disavowals count only from `wallet_since`. |
+| I-6 | Added to the launch checklist. |
+| I-7 | `is_migrated` first checks the pool's owner, its discriminator and that it's at least the vendored layout's size. |
+| I-8 | Every withdrawal needs the passkey while a recovery is pending. |
+| riff-dbc admin (one-step, from the audit package) | Replaced by `propose_admin` / `accept_admin`. `ConfigUpdate` no longer has `admin`. |
+
+**What riffpad.fun (riff-site) must change to match**, before these programs are deployed:
+- Passkey challenges: sign `Recover { new_wallet, passkey }` for `request_recovery` and `contest_recovery`, `Reissue { wallet, passkey }` for `reissue_passport`, and `SetPasskey` with the new key in `set_passkey`. `Register` is now only for `issue_passport`. Variant indexes: `Recover` = 7, `Reissue` = 8.
+- Passkeys must be used from an https page on riffpad.fun or a subdomain, at the top level.
+- The passport admin hand-over script: `propose_admin`, then `accept_admin` from the Squads vault.
+- `update_config` (riff-dbc) no longer takes `admin`; `initialize` takes the `dbcConfig` account. The scripts in `programs/riff-dbc/config/` are updated.
+- Cranks may pass `null` for the partner side's accounts when the launcher has no WSOL account, rather than creating one.
+- Indexers: `Coin` has a trailing `launcher_share_bps: Option<u16>`, and `RecoveryRequested` a trailing `proofs: Vec<ProofKind>`.
+- The devnet programs must be redeployed together (riff-dbc reads the passport crate) and `devnet.mjs e2e` rerun. I couldn't run it here: it needs devnet keys.
+
 ---
 
 ## High

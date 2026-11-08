@@ -302,8 +302,8 @@ fn changes_wallet_and_passkey_with_the_passkey() {
     let (new_proof, pre_new) = next.approve(
         &passport,
         n,
-        &PasskeyAction::Register {
-            passkey: next.public(),
+        &PasskeyAction::SetPasskey {
+            new_passkey: next.public(),
         },
     );
     let set_passkey = ix(
@@ -378,4 +378,174 @@ fn solana_itself_rejects_a_forged_passkey_signature() {
         err.err
     );
     send_many(env.svm(), &[pre, endorse], &[&wallet]).unwrap();
+}
+
+#[test]
+fn passkey_must_be_used_on_riffs_own_pages() {
+    let mut env = setup();
+    let (wallet, passkey) = issued(&mut env);
+    let passport = passport_address(ARTIST_ID);
+    let mint = Keypair::new().pubkey();
+    let endorse = |proof| {
+        ix(
+            riff_passport::instruction::Endorse {
+                mint,
+                passkey_proof: proof,
+            },
+            endorsement_accounts(&wallet.pubkey(), &mint),
+        )
+    };
+    let challenge = |env: &Env| {
+        riff_passport::passkey::challenge(&passport, nonce(env), &PasskeyAction::Endorse { mint })
+            .unwrap()
+    };
+
+    // The right site in the authenticator data, but another page asked:
+    // a related origin on another domain, plain http, an app, or riff's page
+    // embedded in someone else's.
+    for (origin, extra) in [
+        ("https://riffpad-claim.fun", ""),
+        ("http://riffpad.fun", ""),
+        ("android:apk-key-hash:abc", ""),
+        ("https://riffpad.fun", r#","crossOrigin":true"#),
+        (
+            "https://riffpad.fun",
+            r#","crossOrigin":false,"topOrigin":"https://evil.example""#,
+        ),
+    ] {
+        let (proof, pre) = passkey.sign_from(&challenge(&env), origin, extra);
+        assert_error(
+            send_many(env.svm(), &[pre, endorse(proof)], &[&wallet]),
+            E::PasskeyWrongSite,
+        );
+    }
+
+    // A subdomain of riff's site is riff's own (the browser allows it too).
+    let (proof, pre) = passkey.sign_from(&challenge(&env), "https://www.riffpad.fun", "");
+    send_many(env.svm(), &[pre, endorse(proof)], &[&wallet]).unwrap();
+}
+
+fn update_config_ix(
+    admin: &Keypair,
+    params: riff_passport::PassportConfigParams,
+) -> anchor_lang::solana_program::instruction::Instruction {
+    ix(
+        riff_passport::instruction::UpdateConfig { params },
+        riff_passport::accounts::UpdateConfig {
+            admin: admin.pubkey(),
+            config: config_address(),
+        },
+    )
+}
+
+#[test]
+fn the_admin_cant_switch_off_the_passports_protections() {
+    let mut env = setup();
+    let admin = env.admin.insecure_clone();
+    let out_of_bounds: [fn(&mut riff_passport::PassportConfigParams); 4] = [
+        // Withdrawals without the passkey.
+        |p| p.free_withdraw_per_day = riff_passport::MAX_FREE_WITHDRAW_PER_DAY + 1,
+        // No time-lock or probation to speak of.
+        |p| p.recovery_delay = riff_passport::MIN_RECOVERY_DELAY - 1,
+        // Proofs that never go stale.
+        |p| p.proof_max_age = riff_passport::MAX_PROOF_MAX_AGE + 1,
+        |p| p.proof_max_age = 0,
+    ];
+    for change in out_of_bounds {
+        let mut params = config_params(&env);
+        change(&mut params);
+        assert_error(
+            send(env.svm(), update_config_ix(&admin, params), &[&admin]),
+            E::InvalidConfig,
+        );
+    }
+
+    // Another passkey site would lock every artist out.
+    let mut params = config_params(&env);
+    params.rp_id_hash = [7; 32];
+    assert_error(
+        send(env.svm(), update_config_ix(&admin, params), &[&admin]),
+        E::RpIdImmutable,
+    );
+
+    // At the bounds is fine.
+    let mut params = config_params(&env);
+    params.free_withdraw_per_day = riff_passport::MAX_FREE_WITHDRAW_PER_DAY;
+    params.recovery_delay = riff_passport::MIN_RECOVERY_DELAY;
+    params.proof_max_age = riff_passport::MAX_PROOF_MAX_AGE;
+    send(env.svm(), update_config_ix(&admin, params), &[&admin]).unwrap();
+}
+
+#[test]
+fn the_admin_hands_over_to_a_key_that_accepts() {
+    let mut env = setup();
+    let admin = env.admin.insecure_clone();
+    let next = funded_keypair(env.svm());
+    let pending = anchor_lang::prelude::Pubkey::find_program_address(
+        &[riff_passport::PENDING_ADMIN_SEED],
+        &riff_passport::ID,
+    )
+    .0;
+    let propose = |admin: &Keypair, new_admin| {
+        ix(
+            riff_passport::instruction::ProposeAdmin { new_admin },
+            riff_passport::accounts::ProposeAdmin {
+                admin: admin.pubkey(),
+                config: config_address(),
+                pending_admin: pending,
+                system_program: anchor_lang::system_program::ID,
+            },
+        )
+    };
+    let accept = |new_admin: &Keypair| {
+        ix(
+            riff_passport::instruction::AcceptAdmin {},
+            riff_passport::accounts::AcceptAdmin {
+                new_admin: new_admin.pubkey(),
+                config: config_address(),
+                pending_admin: pending,
+            },
+        )
+    };
+
+    // Only the admin proposes.
+    let stranger = funded_keypair(env.svm());
+    assert_error(
+        send(
+            env.svm(),
+            propose(&stranger, stranger.pubkey()),
+            &[&stranger],
+        ),
+        E::NotAdmin,
+    );
+    // A typo'd proposal changes nothing until someone accepts it, and can be
+    // replaced.
+    send(env.svm(), propose(&admin, stranger.pubkey()), &[&admin]).unwrap();
+    send(env.svm(), propose(&admin, next.pubkey()), &[&admin]).unwrap();
+    let config: riff_passport::PassportConfig = fetch(&env.svm, &config_address());
+    assert_eq!(config.admin, admin.pubkey());
+    // Only the proposed key accepts.
+    assert_error(
+        send(env.svm(), accept(&stranger), &[&stranger]),
+        E::NotAdmin,
+    );
+    send(env.svm(), accept(&next), &[&next]).unwrap();
+    let config: riff_passport::PassportConfig = fetch(&env.svm, &config_address());
+    assert_eq!(config.admin, next.pubkey());
+    assert!(env
+        .svm
+        .get_account(&pending)
+        .is_none_or(|a| a.lamports == 0));
+
+    // Only the new admin can change the config now.
+    let params = config_params(&env);
+    assert_error(
+        send(
+            env.svm(),
+            update_config_ix(&admin, params.clone()),
+            &[&admin],
+        ),
+        E::NotAdmin,
+    );
+    send(env.svm(), update_config_ix(&next, params), &[&next]).unwrap();
 }

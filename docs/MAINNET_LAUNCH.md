@@ -10,13 +10,13 @@ A plan, not a record: **nothing here has been run on mainnet.** Every step that 
 | Trade fee | 2%: 0.8% artist, 0.8% partner, 0.4% Meteora | `gen-config.mjs` | Fixed the same way |
 | Graduated pool | DAMM v2, 1% in SOL, all liquidity locked 50/50 | `gen-config.mjs` | Fixed the same way |
 | Launch fee | 0.1 SOL a coin, to the treasury | `LAUNCH_FEE_LAMPORTS` in `programs/riff-dbc/src/lib.rs` | Funds promotion and puts a price on spam. A different amount needs a program upgrade |
-| Launcher share | 3750 bps of the partner share (0.3% of a trade) | `mainnet.params.json` | Admin can change it |
-| `max_launch_buy` | 1 SOL | `mainnet.params.json` | Top-level swaps only: see the audit package |
-| Claim window | 90 days (7,776,000 s) | `mainnet.params.json` | Decided 2026-09-27 for the old program (`riff-site/deploy/mainnet.json`), and kept. New coins only if changed |
-| Passport recovery and probation | 72 hours (259,200 s) | `riff-site/deploy/mainnet.json` | As planned |
-| Passport free withdrawal | 0.1 SOL a day without the passkey | same | Devnet's value. **Owner to confirm** |
-| Passport proof age | 7 days | same | Devnet's value |
-| Passkey site | `riffpad.fun` | same | Passkeys only work on this site from then on |
+| Launcher share | 3750 bps of the partner share (0.3% of a trade) | `mainnet.params.json` | Admin can change it for new coins; each coin keeps the share it was created with |
+| `max_launch_buy` | 1 SOL | `mainnet.params.json` | Top-level swaps in the creating transaction only, so not a security control: see the audit package |
+| Claim window | 90 days (7,776,000 s) | `mainnet.params.json` | Decided 2026-09-27 for the old program (`riff-site/deploy/mainnet.json`), and kept. New coins only if changed. At most a year (`MAX_CLAIM_WINDOW_SECS`) |
+| Passport recovery and probation | 72 hours (259,200 s) | `riff-site/deploy/mainnet.json` | As planned. The program refuses less than 24 hours (`MIN_RECOVERY_DELAY`) |
+| Passport free withdrawal | 0.1 SOL a day without the passkey | same | Devnet's value. **Owner to confirm.** At most 1 SOL (`MAX_FREE_WITHDRAW_PER_DAY`) |
+| Passport proof age | 7 days | same | Devnet's value. At most 30 days (`MAX_PROOF_MAX_AGE`) |
+| Passkey site | `riffpad.fun` | same | Passkeys only work on this site and its subdomains from then on, at the top level of the page. **It can't be changed after initialization** (every passkey is bound to it). Don't serve anything untrusted on a `riffpad.fun` subdomain |
 
 Keeper check: Meteora's docs list 10 SOL as the minimum threshold for their keeper to migrate a SOL pool, and it runs on mainnet only. riff's is about 72. Not yet observed on riff's own config; the crank steps in after an hour either way.
 
@@ -27,13 +27,21 @@ Keep them in `~/.config/riff/mainnet`, never in a repo.
 | Role | What it can do | Holder |
 |---|---|---|
 | Upgrade authority (both programs) | Replace the code, so **everything** | **Squads vault with a time lock** (24–48 h), after launch-day handoff |
-| riff-dbc admin, passport admin | Redirect treasury and charity, change the verifier; revoke and reissue passports | The same Squads vault. riff-dbc's handoff has no acceptance step, so check the address twice |
+| riff-dbc admin, passport admin | Redirect treasury and charity, change the verifier; revoke and reissue passports (with the verifier, that hands a passport and its vault to a new wallet after its probation) | The same Squads vault. Both hand over in two steps: the deployer proposes, the vault accepts in a Squads transaction |
 | Treasury | Receives riff's fees | Separate Squads vault |
 | Charity | Receives unclaimed artist fees; donates by hand | Separate Squads vault, used for nothing else |
-| Verifier | Co-signs claims and proofs. Vouches for the LP position in late claims | Hot key on the server only (`VERIFIER_SECRET_KEY`); never in a multisig. New key for mainnet |
+| Verifier | Co-signs claims and proofs. Vouches for the LP position in late claims. **The most exposed key:** see below | Hot key on the server only, never in a multisig. New keys for mainnet, and **two of them**: riff-dbc's `verifier` (claims) and the passport's `verifier` (proofs) are separate config fields, so give them separate keys, ideally in a KMS or HSM that signs without exporting |
 | Keeper | Pays crank network fees, no other power | Hot key (`KEEPER_SECRET_KEY`), about 1 SOL |
 | Deployer | Temporary upgrade authority and admin; pays | Fresh key for launch day, emptied afterwards |
 | Program keys (`riff-dbc-program.json`, `riff-passport-program.json`) | Decide the addresses, at first deploy only | Copied from `~/.config/riff/devnet`, then offline. Mainnet uses the same addresses as devnet (checked free on 2026-11-02) because `declare_id!` is compiled in |
+
+### The verifier key
+
+Whoever holds the passport verifier key can record proofs for any wallet. With them they can issue a passport for an artist who has none (then claim that artist's coins; the vault pays out after the 72-hour probation), or start a recovery on any passport (it finalizes after 72 hours unless the artist vetoes). The program can't tell a stolen verifier from the real one, so the defence is operational and must be in place before launch:
+
+- **Monitoring with alerts, around the clock:** every `PassportIssued`, `RecoveryRequested` (it lists the proof kinds used), `RecoveryVetoed`, `PassportReissued` and `ArtistClaimed` from the two programs, compared with what riff's server itself signed. An event the server didn't sign means the key is out: revoke the affected passports (`revoke_passport` stops a recovery from finalizing and a vault from paying out) and rotate the key with `update_config`.
+- **Tell the artist off-chain** (email and the app) when a recovery is requested on their passport, so they veto in time.
+- **Rate limits and review on the server** for `record_proof`, and a second review for new passports on artists with held fees.
 
 **Treasury and charity need WSOL accounts**: `collect_fees` and `sweep_charity` pay wrapped SOL. The crank creates them; unwrapping needs a Squads transaction.
 
@@ -56,6 +64,8 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 - [ ] Squads vaults created; signers hold separate hardware wallets; time lock set.
 - [ ] Charity shortlist of organisations that accept crypto and have consented.
 - [ ] Private RPC in `~/.config/riff/mainnet/rpc-url` and in Vercel.
+- [ ] The secp256r1 precompile (`Secp256r1SigVerify1111111111111111111111111`) is active on mainnet-beta (`solana feature status`), and riffpad.fun normalizes passkey signatures to low S before building the precompile instruction (the tests do; the precompile refuses high S).
+- [ ] The verifier monitoring above is live and has fired a test alert.
 
 ## Launch-day commands
 
@@ -82,9 +92,10 @@ node mainnet.mjs setup --yes
 # A small real coin, to check before announcing: launch, trade, crank, claim.
 # Then, while this is still the deployer's to change:
 node mainnet.mjs handoff                          # dry run
-node mainnet.mjs handoff --yes
-# ...then the set-upgrade-authority commands it prints, for both programs,
-# and the passport's admin handoff.
+node mainnet.mjs handoff --yes                    # proposes the vault as riff-dbc's admin
+# ...then the Squads transaction it prints (the vault accepts), the
+# set-upgrade-authority commands, for both programs, and the passport's admin
+# handoff (propose_admin, then accept_admin from the vault).
 node mainnet.mjs status
 ```
 

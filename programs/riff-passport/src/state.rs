@@ -23,6 +23,15 @@ pub struct PassportConfig {
     pub bump: u8,
 }
 
+/// A proposed new admin, waiting for that key to accept. A separate account,
+/// so the config's layout stays as deployed.
+#[account]
+#[derive(InitSpace)]
+pub struct PendingAdmin {
+    pub new_admin: Pubkey,
+    pub bump: u8,
+}
+
 /// The ways an artist can prove who they are.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug, InitSpace)]
 pub enum ProofKind {
