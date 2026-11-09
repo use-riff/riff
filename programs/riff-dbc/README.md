@@ -98,6 +98,5 @@ npm run devnet:status
 
 1. **Late claims after graduation.** A late claim on a graduated coin also collects the creator position's LP fees for charity. Nothing on chain can tell the migration's position from a dust one handed to the escrow, so riff's verifier, which co-signs the claim, vouches for the position passed. It only fits a plain transaction without a compute-budget instruction (so no priority fee, unless it uses a lookup table).
 2. **Surplus.** The graduating buy fills the curve exactly, so Meteora's surplus is zero and this program doesn't collect it.
-3. **Admin.** The admin and the program's upgrade authority should be a multisig on mainnet.
-4. **App.** riffpad.fun needs to create coins, trade (through Meteora or Jupiter), run the cranks (`collect_fees`, `collect_lp_fees`, `pay_artist`, `sweep_charity`) and claim through riff-dbc.
-5. **Audit** before mainnet. It hasn't happened.
+3. **Admin.** On mainnet the admin and both programs' upgrade authority go to a time-locked Squads vault (see [`docs/MAINNET_LAUNCH.md`](../../docs/MAINNET_LAUNCH.md)). The admin handoff has no acceptance step, so check the address twice.
+4. **Unaudited beta.** riff launches without an external audit for now: exposure is kept small with the launch-buy cap and the time-locked upgrade authority. An audit, contest or bounty is revisited when funds allow.
