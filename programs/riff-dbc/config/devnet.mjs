@@ -154,6 +154,7 @@ async function setup() {
         feeAuthority,
         feesVault,
         quoteMint: NATIVE_MINT,
+        dbcConfig: dbcConfig.publicKey,
         program: RIFF_DBC,
         programData,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -568,7 +569,6 @@ async function e2eLate() {
   const update = (claimWindowSecs) =>
     riff.methods
       .updateConfig({
-        admin: config.admin,
         verifier: config.verifier,
         charity: config.charity,
         treasury: config.treasury,

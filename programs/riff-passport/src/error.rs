@@ -56,4 +56,8 @@ pub enum PassportError {
     NotRevoked,
     #[msg("Recovery must move the passport to a new wallet")]
     SameWallet,
+    #[msg("The passport's wallet changed after this recovery was requested")]
+    RecoveryOutdated,
+    #[msg("The passkey site can't change: every passkey is bound to it")]
+    RpIdImmutable,
 }

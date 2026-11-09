@@ -14,16 +14,20 @@ use crate::{constants::CHALLENGE_DOMAIN, error::PassportError, state::Passkey};
 
 pub const SECP256R1_PROGRAM_ID: Pubkey = pubkey!("Secp256r1SigVerify1111111111111111111111111");
 
-/// What the passkey approved. Hashed into the challenge.
+/// What the passkey approved. Hashed into the challenge. Each way a passkey
+/// gets onto a passport has its own action, so a signature made for one
+/// can't be used for another. New variants go at the end: the index is part
+/// of the encoding the site signs.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub enum PasskeyAction {
-    /// Proves the artist holds a new passkey before it's stored.
+    /// `issue_passport`: proves the artist holds the new passkey.
     Register {
         passkey: Passkey,
     },
     SetWallet {
         new_wallet: Pubkey,
     },
+    /// `set_passkey`: both the old and the new passkey sign this.
     SetPasskey {
         new_passkey: Passkey,
     },
@@ -39,6 +43,17 @@ pub enum PasskeyAction {
     },
     Veto {
         new_wallet: Pubkey,
+    },
+    /// `request_recovery` and `contest_recovery`: the new passkey commits to
+    /// the wallet it's recovering to.
+    Recover {
+        new_wallet: Pubkey,
+        passkey: Passkey,
+    },
+    /// `reissue_passport`: the new passkey commits to the artist's wallet.
+    Reissue {
+        wallet: Pubkey,
+        passkey: Passkey,
     },
 }
 
@@ -92,6 +107,18 @@ pub fn verify(
     require!(
         client["type"].as_str() == Some("webauthn.get"),
         PassportError::PasskeyMalformed
+    );
+    // Only riff's own pages, at the top level: not a page embedding riff in
+    // an iframe, an app, or a "related origin" on another domain.
+    require!(
+        client["crossOrigin"].as_bool() != Some(true) && client.get("topOrigin").is_none(),
+        PassportError::PasskeyWrongSite
+    );
+    require!(
+        client["origin"]
+            .as_str()
+            .is_some_and(|origin| origin_matches(origin, rp_id_hash)),
+        PassportError::PasskeyWrongSite
     );
     let signed = client["challenge"]
         .as_str()
@@ -152,6 +179,30 @@ fn precompile_verified(
         }
     }
     Ok(false)
+}
+
+/// Whether `origin` is an https page on the passkey site or one of its
+/// subdomains (for example `https://riffpad.fun` or `https://www.riffpad.fun`
+/// when the site is `riffpad.fun`). Only the site's hash is on chain, so each
+/// suffix of the host that starts at a label is hashed and compared.
+fn origin_matches(origin: &str, rp_id_hash: &[u8; 32]) -> bool {
+    let Some(host) = origin.strip_prefix("https://") else {
+        return false;
+    };
+    // An origin is scheme and host only (riff serves on the default port).
+    if host.is_empty() || host.contains([':', '/', '?', '#', '@']) {
+        return false;
+    }
+    let mut rest = host;
+    loop {
+        if solana_sha256_hasher::hash(rest.as_bytes()).to_bytes() == *rp_id_hash {
+            return true;
+        }
+        match rest.split_once('.') {
+            Some((_, parent)) => rest = parent,
+            None => return false,
+        }
+    }
 }
 
 /// Unpadded base64url, as WebAuthn writes challenges.
@@ -215,6 +266,31 @@ mod tests {
             hex(&challenge(&passport, 2, &add).unwrap()),
             "a2db009f1680c1a5e24852e0299d1d3d788f69f911d1b54748fa2237dc4845d5"
         );
+    }
+
+    #[test]
+    fn origin_must_be_the_passkey_site_over_https() {
+        let site = solana_sha256_hasher::hash(b"riffpad.fun").to_bytes();
+        for ok in [
+            "https://riffpad.fun",
+            "https://www.riffpad.fun",
+            "https://a.b.riffpad.fun",
+        ] {
+            assert!(origin_matches(ok, &site), "{ok}");
+        }
+        for bad in [
+            "http://riffpad.fun",
+            "https://riffpad.fun.evil.com",
+            "https://evilriffpad.fun",
+            "https://riffpad.fun:8443",
+            "https://riffpad.fun/",
+            "https://user@riffpad.fun",
+            "android:apk-key-hash:abc",
+            "https://",
+            "riffpad.fun",
+        ] {
+            assert!(!origin_matches(bad, &site), "{bad}");
+        }
     }
 
     #[test]

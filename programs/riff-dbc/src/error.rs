@@ -36,4 +36,10 @@ pub enum RiffDbcError {
     NotUpgradeAuthority,
     #[msg("A late claim on a graduated coin must collect its LP fees: pass the DAMM v2 accounts")]
     LateClaimNeedsLpAccounts,
+    #[msg("The Meteora config doesn't have the settings riff relies on")]
+    InvalidDbcConfig,
+    #[msg("Pass all of the partner side's accounts, or none of them")]
+    PartnerAccountsIncomplete,
+    #[msg("That key isn't the proposed admin")]
+    NotProposedAdmin,
 }

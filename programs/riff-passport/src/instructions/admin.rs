@@ -7,7 +7,7 @@ use crate::{
     instructions::shared::{fresh_proofs, kinds},
     passkey::{self, PasskeyAction, PasskeyProof},
     program::RiffPassport,
-    state::{proofs_suffice, Passkey, Passport, PassportConfig, ProofSummary},
+    state::{proofs_suffice, Passkey, Passport, PassportConfig, PendingAdmin, ProofSummary},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -20,9 +20,14 @@ pub struct PassportConfigParams {
 }
 
 impl PassportConfigParams {
+    /// Within the bounds in `constants.rs`, so a config change can't switch
+    /// off the time-lock, probation or the passkey on large withdrawals.
     fn apply(self, config: &mut PassportConfig) -> Result<()> {
         require!(
-            self.recovery_delay > 0 && self.proof_max_age > 0,
+            self.recovery_delay >= MIN_RECOVERY_DELAY
+                && self.proof_max_age > 0
+                && self.proof_max_age <= MAX_PROOF_MAX_AGE
+                && self.free_withdraw_per_day <= MAX_FREE_WITHDRAW_PER_DAY,
             PassportError::InvalidConfig
         );
         config.verifier = self.verifier;
@@ -68,11 +73,61 @@ pub struct UpdateConfig<'info> {
     pub config: Account<'info, PassportConfig>,
 }
 
+/// The passkey site stays as initialized: every passkey is bound to it, so a
+/// new one would lock every artist out (moving domains takes an upgrade).
 pub fn handle_update_config(
     ctx: Context<UpdateConfig>,
     params: PassportConfigParams,
 ) -> Result<()> {
+    require!(
+        params.rp_id_hash == ctx.accounts.config.rp_id_hash,
+        PassportError::RpIdImmutable
+    );
     params.apply(&mut ctx.accounts.config)
+}
+
+/// The first step of handing over the admin. Proposing again replaces the
+/// proposal; the admin stays until the new key accepts.
+#[derive(Accounts)]
+pub struct ProposeAdmin<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = admin @ PassportError::NotAdmin)]
+    pub config: Account<'info, PassportConfig>,
+    #[account(
+        init_if_needed,
+        payer = admin,
+        space = 8 + PendingAdmin::INIT_SPACE,
+        seeds = [PENDING_ADMIN_SEED],
+        bump
+    )]
+    pub pending_admin: Account<'info, PendingAdmin>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn handle_propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+    ctx.accounts.pending_admin.set_inner(PendingAdmin {
+        new_admin,
+        bump: ctx.bumps.pending_admin,
+    });
+    Ok(())
+}
+
+/// The second step: the proposed key signs, so a typo can't hand the config
+/// to a key nobody holds. The proposal's rent goes to the new admin.
+#[derive(Accounts)]
+pub struct AcceptAdmin<'info> {
+    #[account(mut, address = pending_admin.new_admin @ PassportError::NotAdmin)]
+    pub new_admin: Signer<'info>,
+    #[account(mut, seeds = [CONFIG_SEED], bump = config.bump)]
+    pub config: Account<'info, PassportConfig>,
+    #[account(mut, seeds = [PENDING_ADMIN_SEED], bump = pending_admin.bump, close = new_admin)]
+    pub pending_admin: Account<'info, PendingAdmin>,
+}
+
+pub fn handle_accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+    ctx.accounts.config.admin = ctx.accounts.new_admin.key();
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -141,12 +196,12 @@ pub fn handle_reissue_passport<'info>(
         PassportError::NotEnoughProofs
     );
 
-    // The nonce has moved on since the first registration, so an old
-    // registration signature can't be replayed here.
+    // Its own action (naming the wallet), and the nonce has moved on since
+    // the first registration, so no other signature can be replayed here.
     let expected = passkey::challenge(
         &passport.key(),
         passport.nonce,
-        &PasskeyAction::Register { passkey },
+        &PasskeyAction::Reissue { wallet, passkey },
     )?;
     passkey::verify(
         &ctx.accounts.instructions,

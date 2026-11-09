@@ -125,6 +125,7 @@ async function setup() {
       feeAuthority,
       feesVault,
       quoteMint: NATIVE_MINT,
+      dbcConfig: dbcConfig.publicKey,
       program: RIFF_DBC,
       programData,
       tokenProgram: TOKEN_PROGRAM_ID,
@@ -135,25 +136,30 @@ async function setup() {
   console.log(`riff-dbc config: ${configPda}`);
 }
 
+/// Hands riff-dbc's admin to the multisig in two steps: the deployer proposes
+/// it here, and the multisig accepts in a Squads transaction of its own, so a
+/// wrong address never takes over.
 async function handoff() {
   const admin = address("admin");
   const config = await riff.account.config.fetch(configPda);
+  const pendingAdmin = pda([b("pending_admin")]);
   if (config.admin.equals(admin)) console.log(`The admin is already ${admin}.`);
   else {
-    console.log(`Admin ${config.admin} → ${admin}. There's no acceptance step: check this address against Squads.`);
+    console.log(`Proposing admin ${config.admin} → ${admin}. Nothing changes until ${admin} accepts.`);
     const ix = await riff.methods
-      .updateConfig({
-        admin,
-        verifier: config.verifier,
-        charity: config.charity,
-        treasury: config.treasury,
-        launcherShareBps: config.launcherShareBps,
-        maxLaunchBuy: config.maxLaunchBuy,
-        claimWindowSecs: config.claimWindowSecs,
-      })
-      .accountsStrict({ admin: deployer.publicKey, config: configPda })
+      .proposeAdmin(admin)
+      .accountsStrict({ admin: deployer.publicKey, config: configPda, pendingAdmin, systemProgram: SystemProgram.programId })
       .instruction();
-    await run([ix], [deployer], "hand over the admin");
+    await run([ix], [deployer], "propose the admin");
+    const accept = await riff.methods
+      .acceptAdmin()
+      .accountsStrict({ newAdmin: admin, config: configPda, pendingAdmin })
+      .instruction();
+    console.log(`\nThen the multisig accepts: a Squads transaction from vault ${admin} with this one instruction:`);
+    console.log(`  program ${accept.programId}`);
+    for (const k of accept.keys) console.log(`  ${k.pubkey} ${k.isSigner ? "signer " : ""}${k.isWritable ? "writable" : "readonly"}`);
+    console.log(`  data (base58) ${anchor.utils.bytes.bs58.encode(accept.data)}`);
+    console.log(`Check with \`node mainnet.mjs status\` that the admin is ${admin}.`);
   }
   console.log(`\nThen, by hand, after checking the address again:\n  solana program set-upgrade-authority ${RIFF_DBC} --new-upgrade-authority ${admin} --skip-new-upgrade-authority-signer-check --keypair ${KEYS}/deployer.json --url mainnet-beta`);
 }

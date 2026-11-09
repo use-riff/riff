@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, Discriminator};
 use anchor_spl::{
     token::{Mint, Token, TokenAccount},
     token_2022::Token2022,
@@ -113,11 +113,19 @@ pub struct ClaimArtist<'info> {
     pub damm_program: Option<Program<'info, cp_amm::program::CpAmm>>,
 }
 
-/// Whether Meteora has migrated this DBC pool to DAMM v2.
+/// Whether Meteora has migrated this DBC pool to DAMM v2. The flag is read
+/// at its offset in the vendored IDL's layout, so the account must still be
+/// a DBC pool of at least that layout's size: a Meteora upgrade that changed
+/// it fails the claim here rather than misreading the flag.
 fn is_migrated(pool: &AccountInfo) -> Result<bool> {
-    let at = 8 + core::mem::offset_of!(PoolState, is_migrated);
     let data = pool.try_borrow_data()?;
-    Ok(*data.get(at).ok_or(error!(RiffDbcError::WrongPool))? != 0)
+    require!(
+        *pool.owner == dynamic_bonding_curve::ID
+            && data.len() >= 8 + core::mem::size_of::<PoolState>()
+            && data[..8] == *dynamic_bonding_curve::accounts::VirtualPool::DISCRIMINATOR,
+        RiffDbcError::WrongPool
+    );
+    Ok(data[8 + core::mem::offset_of!(PoolState, is_migrated)] != 0)
 }
 
 pub fn handle_claim_artist<'info>(ctx: Context<'info, ClaimArtist<'info>>) -> Result<()> {

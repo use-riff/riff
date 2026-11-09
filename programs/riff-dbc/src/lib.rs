@@ -38,10 +38,13 @@ pub const ARTIST_VAULT_SEED: &[u8] = b"artist_vault";
 /// A WSOL account that lives for one instruction, to unwrap the artist's
 /// fees into SOL for their passport vault.
 pub const UNWRAP_SEED: &[u8] = b"unwrap";
+pub const PENDING_ADMIN_SEED: &[u8] = b"pending_admin";
 
 pub const MAX_ARTIST_ID_LEN: usize = 64;
 pub const MAX_ARTIST_NAME_LEN: usize = 64;
 pub const BPS: u64 = 10_000;
+/// The longest claim window the config may set (a year).
+pub const MAX_CLAIM_WINDOW_SECS: i64 = 365 * 24 * 60 * 60;
 /// What launching a coin costs, paid to riff's treasury. It funds promotion of
 /// coins and puts a price on spam. A constant, so changing it means an upgrade.
 pub const LAUNCH_FEE_LAMPORTS: u64 = 100_000_000;
@@ -56,6 +59,15 @@ pub mod riff_dbc {
 
     pub fn update_config(ctx: Context<UpdateConfig>, params: ConfigUpdate) -> Result<()> {
         instructions::update_config::handle_update_config(ctx, params)
+    }
+
+    /// The admin proposes a new admin, who must accept.
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        instructions::update_config::handle_propose_admin(ctx, new_admin)
+    }
+
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        instructions::update_config::handle_accept_admin(ctx)
     }
 
     pub fn create_coin<'info>(

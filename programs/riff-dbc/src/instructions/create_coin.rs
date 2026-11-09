@@ -165,9 +165,12 @@ pub fn handle_create_coin<'info>(
 
     let now = Clock::get()?.unix_timestamp;
     let claim_window = a.config.claim_window_secs;
+    let launcher_share_bps = a.config.launcher_share_bps;
     let pool = a.pool.key();
     let launcher = a.launcher.key();
-    let claim_deadline = now + claim_window;
+    let claim_deadline = now
+        .checked_add(claim_window)
+        .ok_or(error!(RiffDbcError::MathOverflow))?;
     emit!(CoinCreated {
         mint,
         pool,
@@ -188,6 +191,7 @@ pub fn handle_create_coin<'info>(
         launcher_fees_total: 0,
         bump: ctx.bumps.coin,
         escrow_bump: ctx.bumps.escrow,
+        launcher_share_bps: Some(launcher_share_bps),
     });
     Ok(())
 }

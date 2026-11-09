@@ -35,21 +35,99 @@ pub fn handle_request_recovery<'info>(
     passkey_proof: PasskeyProof,
 ) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
-    let config = &ctx.accounts.config;
-    let new_wallet = ctx.accounts.new_wallet.key();
-    let passport = &mut ctx.accounts.passport;
-    require!(passport.recovery.is_none(), PassportError::RecoveryPending);
-    // The current wallet alone must not be enough to replace the passkey.
-    require!(new_wallet != passport.wallet, PassportError::SameWallet);
-    let records = fresh_proofs(
-        ctx.remaining_accounts,
-        &passport.artist_id.clone(),
+    let a = ctx.accounts;
+    require!(
+        a.passport.recovery.is_none(),
+        PassportError::RecoveryPending
+    );
+    let new_wallet = a.new_wallet.key();
+    let records = recovery_proofs(
+        &a.passport,
+        &a.config,
         &new_wallet,
+        ctx.remaining_accounts,
+        now,
+    )?;
+    start_recovery(
+        &mut a.passport,
+        &a.config,
+        &a.instructions,
+        new_wallet,
+        new_passkey,
+        &passkey_proof,
+        &records,
+        now,
+    )
+}
+
+/// Replaces a pending recovery with the signer's own, for a guardian: a
+/// recovery request whose fresh proofs include one of the passport's own
+/// sources, made after the pending one was requested. An artist who lost
+/// both the wallet and the passkey can't be kept out by someone re-requesting
+/// a recovery each time it's vetoed (only one can be pending): the guardian
+/// takes the slot in the same instruction. The time-lock starts again, and
+/// the current passkey can still veto.
+pub fn handle_contest_recovery<'info>(
+    ctx: Context<'info, RequestRecovery<'info>>,
+    new_passkey: Passkey,
+    passkey_proof: PasskeyProof,
+) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let a = ctx.accounts;
+    let pending = a
+        .passport
+        .recovery
+        .ok_or(error!(PassportError::NoRecovery))?;
+    let new_wallet = a.new_wallet.key();
+    let records = recovery_proofs(
+        &a.passport,
+        &a.config,
+        &new_wallet,
+        ctx.remaining_accounts,
+        now,
+    )?;
+    let guardian = records
+        .iter()
+        .find(|(_, r)| r.verified_at >= pending.requested_at && is_guardian(&a.passport, r))
+        .map(|(_, r)| r.kind)
+        .ok_or(error!(PassportError::NotAGuardian))?;
+    emit!(RecoveryVetoed {
+        passport: a.passport.key(),
+        by_passkey: false,
+        by_proof: Some(guardian)
+    });
+    start_recovery(
+        &mut a.passport,
+        &a.config,
+        &a.instructions,
+        new_wallet,
+        new_passkey,
+        &passkey_proof,
+        &records,
+        now,
+    )
+}
+
+/// The new wallet's proofs for a recovery: fresh, enough, from a wallet other
+/// than the passport's, and made after the current wallet took over (records
+/// from before could belong to a wallet the artist moved away from, maybe a
+/// stolen one).
+fn recovery_proofs<'info>(
+    passport: &Passport,
+    config: &PassportConfig,
+    new_wallet: &Pubkey,
+    accounts: &'info [AccountInfo<'info>],
+    now: i64,
+) -> Result<Vec<(Pubkey, ProofRecord)>> {
+    // The current wallet alone must not be enough to replace the passkey.
+    require!(*new_wallet != passport.wallet, PassportError::SameWallet);
+    let records = fresh_proofs(
+        accounts,
+        &passport.artist_id,
+        new_wallet,
         now,
         config.proof_max_age,
     )?;
-    // Records from before the current wallet took over could belong to a
-    // wallet the artist already moved away from, maybe a stolen one.
     require!(
         records
             .iter()
@@ -60,20 +138,34 @@ pub fn handle_request_recovery<'info>(
         proofs_suffice(&kinds(&records)),
         PassportError::NotEnoughProofs
     );
+    Ok(records)
+}
 
+#[allow(clippy::too_many_arguments)]
+fn start_recovery(
+    passport: &mut Account<Passport>,
+    config: &PassportConfig,
+    instructions: &AccountInfo,
+    new_wallet: Pubkey,
+    new_passkey: Passkey,
+    passkey_proof: &PasskeyProof,
+    records: &[(Pubkey, ProofRecord)],
+    now: i64,
+) -> Result<()> {
     let expected = passkey::challenge(
         &passport.key(),
         passport.nonce,
-        &PasskeyAction::Register {
+        &PasskeyAction::Recover {
+            new_wallet,
             passkey: new_passkey,
         },
     )?;
     passkey::verify(
-        &ctx.accounts.instructions,
+        instructions,
         &new_passkey,
         &config.rp_id_hash,
         &expected,
-        &passkey_proof,
+        passkey_proof,
     )?;
     passport.nonce = passport
         .nonce
@@ -92,7 +184,8 @@ pub fn handle_request_recovery<'info>(
     emit!(RecoveryRequested {
         passport: passport.key(),
         new_wallet,
-        effective_at
+        effective_at,
+        proofs: kinds(records)
     });
     Ok(())
 }
@@ -195,6 +288,11 @@ pub fn handle_finalize_recovery(ctx: Context<FinalizeRecovery>) -> Result<()> {
     let passport = &mut ctx.accounts.passport;
     let recovery = passport.recovery.ok_or(error!(PassportError::NoRecovery))?;
     require!(now >= recovery.effective_at, PassportError::RecoveryLocked);
+    // Backstop: a wallet change ends a pending recovery (see set_wallet).
+    require!(
+        recovery.requested_at >= passport.wallet_since,
+        PassportError::RecoveryOutdated
+    );
     passport.wallet = recovery.new_wallet;
     passport.wallet_since = now;
     passport.passkey = recovery.new_passkey;

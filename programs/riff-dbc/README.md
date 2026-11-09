@@ -12,12 +12,14 @@ Meteora runs the curve, trading and graduation. Launchpads built on DBC (Audius 
 |---|---|
 | riff's DBC config | Created once with Meteora. Its fee claimer is riff's **fee authority** (a PDA of this program). |
 | `create_coin` | Creates the coin's Meteora pool with a per-coin **escrow** PDA as the pool creator, for good, and records the launcher, artist and claim deadline. The launcher's first buy can go in the same transaction, capped (see below). |
-| `collect_fees` | Anyone can call it. It claims this pool's partner share and splits it between the coin's launcher and riff's treasury, and moves the creator share into the coin's **artist vault**. |
+| `collect_fees` | Anyone can call it. It claims this pool's partner share and splits it between the coin's launcher and riff's treasury (at the launcher share the coin was created with), and moves the creator share into the coin's **artist vault**. Without the launcher's and treasury's accounts it does only the artist's side, so a launcher who closes their WSOL account can't hold up the artist. |
 | `claim_artist` | The passport's wallet, co-signed by riff's verifier. The coin's artist becomes the **passport's vault**: the held fees are paid there in SOL. A late claim (after the window) sends what was held to charity, including a graduated coin's uncollected LP fees; only later fees go to the artist. |
 | `pay_artist` | Anyone can call it. It pays a claimed coin's collected fees to the passport vault, in SOL. |
 | `sweep_charity` | After the claim window, while unclaimed, anyone can call it. It sends held artist fees to the charity wallet. |
-| `collect_lp_fees` | After graduation, anyone can call it. It collects the LP fees of the coin's two locked DAMM v2 positions: riff's side split with the launcher, the artist's side into the artist vault. |
-| `update_config` | The admin: verifier, charity, treasury, launcher share, launch buy cap, claim window (for new coins). |
+| `collect_lp_fees` | After graduation, anyone can call it. It collects the LP fees of the coin's two locked DAMM v2 positions: riff's side split with the launcher, the artist's side into the artist vault. The partner side's accounts are optional here too. |
+| `update_config` | The admin: verifier, charity, treasury, launch buy cap; launcher share and claim window for new coins (each coin keeps its own). |
+| `propose_admin`, `accept_admin` | Hands over the admin: the admin proposes, the new key accepts. |
+| `initialize` | Once, by the upgrade authority. Checks that riff's Meteora config, which can never change afterwards, has the settings riff relies on. |
 
 Trades don't go through this program. A trade through any other app pays the same fees as one on riffpad.fun, because Meteora charges them.
 
@@ -44,7 +46,7 @@ The coin graduates at about 72 SOL in the curve (30 → 300 SOL market cap; devn
 
 The launcher can buy in the transaction that creates the coin: plain Meteora `swap` instructions after `create_coin`. `create_coin` reads the transaction and refuses it if those buys total more than `max_launch_buy` (1 SOL planned for mainnet, 0.01 SOL on devnet), or if any other kind of Meteora instruction touches the new pool.
 
-It caps the obvious path, not every path: buys nested inside another program's instruction (a router, say) don't show up in the transaction's top-level instructions, so a determined launcher can still buy more in the same transaction. Those buys pay the same 2% as everyone's.
+It caps the obvious path, not every path, so **it isn't a security control**: buys nested inside another program's instruction (a router, say) don't show up in the transaction's top-level instructions, and nothing stops a second transaction in the same block or bundle, or buys from other wallets. Those buys pay the same 2% as everyone's.
 
 There's no anti-sniping fee. Meteora's launch fee schedule only lets a buy in the pool's creating transaction pay the normal fee when that transaction creates the pool itself, at the top level. riff's program creates the pool (its escrow signs as creator), so the launcher's own buy would pay the anti-sniping fee too. The tests found this.
 
