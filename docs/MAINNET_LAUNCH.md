@@ -47,16 +47,16 @@ Whoever holds the passport verifier key can record proofs for any wallet. With t
 
 ## Cost
 
-Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
+Mainnet rent as of 2026-11-09 (`solana rent`), for the verifiable binaries:
 
 | Item | SOL |
 |---|---|
-| riff-dbc program rent (468,496 bytes) | 2.38 |
-| riff-passport program rent (481,888 bytes) | 2.44 |
-| Deploy buffers, the same again; refunded when the deploy finishes | about 4.9 (back) |
+| riff-dbc program rent (498,688 bytes) | 2.53 |
+| riff-passport program rent (519,632 bytes) | 2.64 |
+| Deploy buffer, one program at a time; refunded when that deploy finishes, so at most about 2.6 is out at once | about 2.6 (back) |
 | riff-dbc and passport configs, fees vault, Meteora config, network and priority fees | about 0.05 (estimate) |
 | Keeper float | 1.00 |
-| **Have in hand** | **about 11**, of which about 5 comes back |
+| **Have in hand** | **about 9** (8 in the deployer, 1 for the keeper), of which about 2.6 comes back. About 5.2 is spent for good |
 
 ## Before launch day (humans)
 
@@ -64,8 +64,8 @@ Mainnet rent as of 2026-11-02 (`solana rent`), for the verifiable binaries:
 - [ ] Squads vaults created; signers hold separate hardware wallets; time lock set.
 - [ ] Charity shortlist of organisations that accept crypto and have consented.
 - [ ] Private RPC in `~/.config/riff/mainnet/rpc-url` and in Vercel.
-- [ ] The secp256r1 precompile (`Secp256r1SigVerify1111111111111111111111111`) is active on mainnet-beta (`solana feature status`), and riffpad.fun normalizes passkey signatures to low S before building the precompile instruction (the tests do; the precompile refuses high S).
-- [ ] The verifier monitoring above is live and has fired a test alert.
+- [x] The secp256r1 precompile (`Secp256r1SigVerify1111111111111111111111111`) is active on mainnet-beta (SIMD-0075, since epoch 800, checked 2026-11-09), and riffpad.fun normalizes passkey signatures to low S (`derToLowS` in `clients/ts/src/passkey.ts`; the precompile refuses high S).
+- [ ] The verifier monitoring above (`/api/monitor` in riff-site, alerts by Telegram) is live and has fired a test alert.
 
 ## Launch-day commands
 

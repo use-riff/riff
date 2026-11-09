@@ -20,7 +20,7 @@
         "meteoraConfig": "5m2xhUh7aJJ2KfwkHk7qNCCDaUzmzp15detHbZA1TfsZ",
         "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
         "notes": "0.3 -> 3 SOL market cap (graduates at ~0.72 SOL), 0.01 SOL launch buy cap, 1-hour claim window, 0.1 SOL launch fee. Set up with programs/riff-dbc/config/devnet.mjs.",
-        "binarySha256": "4f9e52bc7f5f0ae4a6a59383e5356dbcdfae87a2d11e25b4da8907beb0f71607"
+        "binarySha256": "3e0c309b7c8599733ca286f9122a4252853a5aa17ff71cd1ccfa472bb39eb77a"
       },
       "mainnet-beta": {
         "status": "not deployed",
@@ -37,7 +37,7 @@
         "programId": "2nke6euXvAnbtdtcbbk8N2Z3SRLuR7i67VYmSdcY5kwj",
         "config": "5S3RcpLwjs8eJ4GoV1stc2YeQNqvvKwhFS28iz5zM5ip",
         "upgradeAuthority": "3AVjbucwHErbr6i6SzS2K7xLrawpvwugpsFwobiTq8FZ",
-        "binarySha256": "5ac1ec0e72b6f86a699d19fe10835af08fb4f1bea1987239ca9fe292e9a24bdc",
+        "binarySha256": "a69d4c01460e7221359a634c137c22725324ef4d654062fcb8c2fbe4904b284f",
         "notes": "5-minute recovery time-lock and new-passport probation (72 hours planned for mainnet), 0.1 SOL a day without the passkey, proofs valid for 7 days, passkeys for riffpad.fun. Upgraded 2026-10-27 to main (wallet_since layout); no passports are kept on devnet: the riff-dbc e2e issues a test passport and resets it."
       },
       "mainnet-beta": {

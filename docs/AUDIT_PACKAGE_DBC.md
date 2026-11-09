@@ -133,12 +133,12 @@ riff-dbc's tests write Passport accounts directly; `cargo test -p riff-passport`
 
 The toolchain is pinned: `rust-toolchain.toml`, `Cargo.lock`, and CI pins Solana CLI and Anchor by hash.
 
-`make verifiable` builds both programs with `solana-verify` in Docker, using the Solana Foundation's 4.1.2 image pinned by digest. **This is the build to audit and deploy.** From a clean clone of `fd85fd2` (main with the launch fee); riff-passport's binary is unchanged since the commit that retired the old program:
+`make verifiable` builds both programs with `solana-verify` in Docker, using the Solana Foundation's 4.1.2 image pinned by digest. **This is the build to audit and deploy.** From a clean clone of `bf9b472` (main with the security review's fixes), 2026-11-09:
 
 | Program | Size | File sha256 | `solana-verify` executable hash |
 |---|---|---|---|
-| riff-dbc | 468,496 bytes | `d1993e4354ff09eb7bf5476248fcccb5882f948d8296d725e9f1c2ce5728681b` | `aa327ff92c1b4aec652e4f6567f31c002c7aa4db50d3cce83e821df030f75208` |
-| riff-passport | 481,888 bytes | `8a6ddcc2f4705958f0bcec04ed29d923f3298915ec0a800d5f0925e0d1fdbbfb` | `451a0afcd879df8a4516f35d0178a7777729c12e747b8b48824f3c484ade6cb8` |
+| riff-dbc | 498,688 bytes | `db2ae6eebdbbfb78173cf20dfa14a2dfdaa5d3259b3c091efc21abf15205c09b` | `402652a261dfdd5037a202c8debc9dd67cc051c27fbd9c483e0a45912e5a0312` |
+| riff-passport | 519,632 bytes | `45eb0e515e7df2caf1d9d64512343b6e09b61fd1d6b81e516c6d2c9daf9f5656` | `bc0f9226202b89ea3f139c3436e9d8adaf6581b02244615069131d4ba90a6ee2` |
 
 These change whenever the programs' source or dependencies do: **the hashes that matter are the ones from the audited commit.** At the earlier commit `7cab289`, riff-dbc's Docker build matched a plain `cargo build-sbf --manifest-path programs/riff-dbc/Cargo.toml --arch v0` on the developer's machine byte for byte. `make build` (Anchor, building the whole workspace) gives different binaries, for example about 450 KB for riff-dbc. CI and devnet use that build.
 
