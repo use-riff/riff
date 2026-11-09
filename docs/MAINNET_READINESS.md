@@ -97,3 +97,10 @@ Official estate coins are dropped for now (owner's decision): riff-dbc only pays
 
 `make verifiable` from a clean clone of `fd85fd2` (2026-11-06): riff-dbc's new hashes are in the audit package; riff-passport's binary is unchanged. Devnet still runs the `make build` binary, not this one.
 
+## Security review fixes on devnet (2026-11-09)
+
+Both programs from `main` (`bf9b472`) deployed to devnet: [passport](https://explorer.solana.com/tx/15QyzR8xuNWtdWn2gja5fuFoAuTqwbAjqAHUHyaMxviAu4yygsZebJbYMcsd8p4McpdAFCyoiyLfKN3gHypR1Sq?cluster=devnet), [riff-dbc](https://explorer.solana.com/tx/31igN2c9rkmLkW3wKn4o79vpTdBDsP7zwrssN17NJ6urjfapA1sbKxecohH1WHJVtn7TrW63njbB7obATehGuxXt?cluster=devnet). `node devnet.mjs e2e` and `e2e --late` passed on them. These are `make build` binaries, not the verifiable ones: the passport's devnet build has different features, so its mainnet binary can't run this e2e.
+
+`make verifiable` from a clean clone of `bf9b472`: new hashes in the audit package.
+
+`npm audit` in `programs/riff-dbc/config` lists `toml` and `uuid` with no fix available; they come in through Meteora's and Solana's SDKs. Those scripts only parse local files, so this is accepted for launch.
